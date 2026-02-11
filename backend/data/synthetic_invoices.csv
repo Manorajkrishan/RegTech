@@ -1,0 +1,101 @@
+id,supplier,description,amount_gbp,quantity,unit,category,date,document_type
+INV-00009,Viking Direct,Printer paper A4,183.46,0.18,kg,paper_tonne,2026-02-08,invoice
+INV-00004,British Gas,Electricity invoice,25257.73,25257.73,kWh,electricity,2026-01-26,invoice
+INV-00070,Octopus Energy,Office electricity quarterly,8036.72,8036.72,kWh,electricity,2026-01-26,invoice
+INV-00100,Esso,Fleet fuel,1947.3,2920.95,litre,diesel_litres,2026-01-22,invoice
+INV-00039,UPS,International shipping,54416.43,0.54,tonne.km,freight_sea_kg_km,2026-01-18,invoice
+INV-00094,Generic Supplies Ltd,Materials,764.49,764.49,GBP,generic_materials_gbp,2026-01-17,invoice
+INV-00077,Travelodge,Business stay,2.4,2.4,night,hotel_night,2026-01-15,invoice
+INV-00029,Thames Water,Water supply,78.37,78.37,m3,water_m3,2026-01-14,invoice
+INV-00092,Shell Fuel,Petrol - business travel,307.7,430.78,litre,petrol_litres,2026-01-13,invoice
+INV-00087,Shell Fuel,Petrol - business travel,705.26,987.36,litre,petrol_litres,2026-01-12,invoice
+INV-00093,Viking Direct,Printer paper A4,320.72,0.32,kg,paper_tonne,2026-01-11,invoice
+INV-00041,Thames Water,Water supply,95.99,95.99,m3,water_m3,2026-01-10,invoice
+INV-00019,Viking Direct,Printer paper A4,157.69,0.16,kg,paper_tonne,2026-01-07,invoice
+INV-00058,Generic Supplies Ltd,Materials,1074.78,1074.78,GBP,generic_materials_gbp,2026-01-07,invoice
+INV-00097,British Gas,Electricity invoice,34648.33,34648.33,kWh,electricity,2026-01-07,invoice
+INV-00057,Viking Direct,Printer paper A4,384.08,0.38,kg,paper_tonne,2025-12-30,invoice
+INV-00013,British Gas,Natural gas supply,4596.88,4596.88,kWh,natural_gas,2025-12-24,invoice
+INV-00075,Travelodge,Business stay,1.57,1.57,night,hotel_night,2025-12-24,invoice
+INV-00021,British Gas,Electricity invoice,34791.44,34791.44,kWh,electricity,2025-12-22,invoice
+INV-00002,Esso,Fleet fuel,1058.03,1587.05,litre,diesel_litres,2025-12-21,invoice
+INV-00046,Consulting Co,Professional services,3563.85,3563.85,GBP,generic_services_gbp,2025-12-16,invoice
+INV-00044,EDF Energy,Business electricity supply,35612.75,35612.75,kWh,electricity,2025-12-15,invoice
+INV-00059,Consulting Co,Professional services,3130.82,3130.82,GBP,generic_services_gbp,2025-12-09,invoice
+INV-00038,British Airways,Flight London-Edinburgh,443.86,443.86,km,flight_short_haul_km,2025-12-03,invoice
+INV-00011,Travelodge,Business stay,2.02,2.02,night,hotel_night,2025-11-24,invoice
+INV-00091,Thames Water,Water supply,149.31,149.31,m3,water_m3,2025-11-24,invoice
+INV-00040,British Gas,Natural gas supply,6279.56,6279.56,kWh,natural_gas,2025-11-22,invoice
+INV-00052,Shell Energy,Gas heating,8104.36,8104.36,kWh,natural_gas,2025-11-21,invoice
+INV-00080,British Gas,Natural gas supply,8962.38,8962.38,kWh,natural_gas,2025-11-06,invoice
+INV-00051,HP,Printer,504.6,504.6,GBP,office_equipment_gbp,2025-11-02,invoice
+INV-00063,Consulting Co,Professional services,3919.72,3919.72,GBP,generic_services_gbp,2025-11-01,invoice
+INV-00031,Premier Inn,Hotel accommodation - 2 nights,2.8,2.8,night,hotel_night,2025-10-26,invoice
+INV-00072,Enterprise Rent-A-Car,Business car hire - 5 days,601.39,601.39,km,car_diesel_km,2025-10-25,invoice
+INV-00028,HP,Printer,612.9,612.9,GBP,office_equipment_gbp,2025-10-22,invoice
+INV-00068,Staples,Office paper and stationery,153.55,0.15,kg,paper_tonne,2025-10-22,invoice
+INV-00066,DHL,Freight delivery,1044.52,1.04,tonne.km,freight_road_kg_km,2025-10-19,invoice
+INV-00005,EDF Energy,Business electricity supply,9216.29,9216.29,kWh,electricity,2025-10-15,invoice
+INV-00098,Dell,Laptop purchase,567.96,567.96,GBP,office_equipment_gbp,2025-10-14,invoice
+INV-00071,TFL,Oyster business travel,67.71,67.71,km,train_underground_km,2025-10-13,invoice
+INV-00085,EDF Energy,Business electricity supply,48604.83,48604.83,kWh,electricity,2025-10-13,invoice
+INV-00056,National Rail,Rail tickets London-Manchester,371.84,371.84,km,train_national_km,2025-10-11,invoice
+INV-00026,HP,Printer,302.68,302.68,GBP,office_equipment_gbp,2025-10-09,invoice
+INV-00082,BP Fuel,Diesel for company vehicles,701.38,1052.07,litre,diesel_litres,2025-10-07,invoice
+INV-00048,EDF Energy,Business electricity supply,47921.72,47921.72,kWh,electricity,2025-09-30,invoice
+INV-00034,HP,Printer,475.31,475.31,GBP,office_equipment_gbp,2025-09-29,invoice
+INV-00045,Thames Water,Water supply,179.26,179.26,m3,water_m3,2025-09-28,invoice
+INV-00027,BP Fuel,Diesel for company vehicles,1032.07,1548.11,litre,diesel_litres,2025-09-26,invoice
+INV-00001,HP,Printer,266.8,266.8,GBP,office_equipment_gbp,2025-09-24,invoice
+INV-00020,Octopus Energy,Office electricity quarterly,17547.79,17547.79,kWh,electricity,2025-09-16,invoice
+INV-00050,British Gas,Natural gas supply,26374.52,26374.52,kWh,natural_gas,2025-09-12,invoice
+INV-00030,Esso,Fleet fuel,2554.51,3831.77,litre,diesel_litres,2025-09-03,invoice
+INV-00032,Viking Direct,Printer paper A4,362.91,0.36,kg,paper_tonne,2025-09-03,invoice
+INV-00012,Shell Fuel,Petrol - business travel,770.05,1078.07,litre,petrol_litres,2025-08-23,invoice
+INV-00079,British Gas,Natural gas supply,3697.15,3697.15,kWh,natural_gas,2025-08-22,invoice
+INV-00023,British Airways,Flight London-Edinburgh,432.53,432.53,km,flight_short_haul_km,2025-08-14,invoice
+INV-00018,Dell,Laptop purchase,1385.45,1385.45,GBP,office_equipment_gbp,2025-08-10,invoice
+INV-00055,EDF Energy,Business electricity supply,10034.05,10034.05,kWh,electricity,2025-08-10,invoice
+INV-00016,Staples,Office paper and stationery,106.17,0.11,kg,paper_tonne,2025-08-02,invoice
+INV-00088,BP Fuel,Diesel for company vehicles,882.15,1323.22,litre,diesel_litres,2025-07-27,invoice
+INV-00033,Shell Fuel,Petrol - business travel,558.81,782.33,litre,petrol_litres,2025-07-24,invoice
+INV-00037,Travelodge,Business stay,3.69,3.69,night,hotel_night,2025-07-22,invoice
+INV-00076,Thames Water,Water supply,97.59,97.59,m3,water_m3,2025-07-10,invoice
+INV-00081,Staples,Office paper and stationery,251.88,0.25,kg,paper_tonne,2025-07-10,invoice
+INV-00008,Staples,Office paper and stationery,238.78,0.24,kg,paper_tonne,2025-06-27,invoice
+INV-00047,National Rail,Rail tickets London-Manchester,430.43,430.43,km,train_national_km,2025-06-24,invoice
+INV-00089,Enterprise Rent-A-Car,Business car hire - 5 days,755.91,755.91,km,car_diesel_km,2025-06-24,invoice
+INV-00015,Enterprise Rent-A-Car,Business car hire - 5 days,684.28,684.28,km,car_diesel_km,2025-06-21,invoice
+INV-00042,Premier Inn,Hotel accommodation - 2 nights,3.14,3.14,night,hotel_night,2025-06-17,invoice
+INV-00074,Viking Direct,Printer paper A4,241.8,0.24,kg,paper_tonne,2025-06-14,invoice
+INV-00086,BP Fuel,Diesel for company vehicles,931.55,1397.32,litre,diesel_litres,2025-06-10,invoice
+INV-00054,EDF Energy,Business electricity supply,31952.51,31952.51,kWh,electricity,2025-06-06,invoice
+INV-00049,UPS,International shipping,78576.6,0.79,tonne.km,freight_sea_kg_km,2025-05-28,invoice
+INV-00096,BP Fuel,Diesel for company vehicles,302.38,453.57,litre,diesel_litres,2025-05-27,invoice
+INV-00065,HP,Printer,424.05,424.05,GBP,office_equipment_gbp,2025-05-23,invoice
+INV-00053,Staples,Office paper and stationery,479.07,0.48,kg,paper_tonne,2025-05-16,invoice
+INV-00095,Viking Direct,Printer paper A4,243.04,0.24,kg,paper_tonne,2025-05-16,invoice
+INV-00062,Travelodge,Business stay,3.89,3.89,night,hotel_night,2025-05-11,invoice
+INV-00084,British Gas,Natural gas supply,3416.47,3416.47,kWh,natural_gas,2025-05-11,invoice
+INV-00003,Thames Water,Water supply,153.32,153.32,m3,water_m3,2025-05-08,invoice
+INV-00060,Shell Energy,Gas heating,13535.27,13535.27,kWh,natural_gas,2025-05-06,invoice
+INV-00083,British Gas,Electricity invoice,19952.71,19952.71,kWh,electricity,2025-05-06,invoice
+INV-00043,UPS,International shipping,32627.27,0.33,tonne.km,freight_sea_kg_km,2025-05-04,invoice
+INV-00090,National Rail,Rail tickets London-Manchester,426.9,426.9,km,train_national_km,2025-05-03,invoice
+INV-00006,UPS,International shipping,64181.69,0.64,tonne.km,freight_sea_kg_km,2025-04-30,invoice
+INV-00035,Shell Energy,Gas heating,5685.92,5685.92,kWh,natural_gas,2025-04-30,invoice
+INV-00099,Premier Inn,Hotel accommodation - 2 nights,2.36,2.36,night,hotel_night,2025-04-26,invoice
+INV-00073,Staples,Office paper and stationery,109.54,0.11,kg,paper_tonne,2025-04-25,invoice
+INV-00036,Staples,Office paper and stationery,168.23,0.17,kg,paper_tonne,2025-04-18,invoice
+INV-00067,British Gas,Electricity invoice,16171.08,16171.08,kWh,electricity,2025-04-16,invoice
+INV-00014,British Airways,Flight London-Edinburgh,569.5,569.5,km,flight_short_haul_km,2025-04-08,invoice
+INV-00061,BP Fuel,Diesel for company vehicles,677.1,1015.65,litre,diesel_litres,2025-04-07,invoice
+INV-00025,Thames Water,Water supply,136.65,136.65,m3,water_m3,2025-04-06,invoice
+INV-00017,British Gas,Electricity invoice,23873.46,23873.46,kWh,electricity,2025-03-27,invoice
+INV-00069,EDF Energy,Business electricity supply,8194.69,8194.69,kWh,electricity,2025-03-25,invoice
+INV-00022,Premier Inn,Hotel accommodation - 2 nights,2.83,2.83,night,hotel_night,2025-03-23,invoice
+INV-00078,Thames Water,Water supply,137.62,137.62,m3,water_m3,2025-03-18,invoice
+INV-00064,Biffa,Waste collection,1279.29,1279.29,kg,waste_general_kg,2025-03-05,invoice
+INV-00010,Consulting Co,Professional services,4223.28,4223.28,GBP,generic_services_gbp,2025-02-19,invoice
+INV-00007,Shell Fuel,Petrol - business travel,601.21,841.69,litre,petrol_litres,2025-02-17,invoice
+INV-00024,Shell Fuel,Petrol - business travel,569.12,796.77,litre,petrol_litres,2025-02-17,invoice

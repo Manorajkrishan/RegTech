@@ -1,0 +1,27 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# AI / NLP (spaCy optional - keyword matching works without it)
+# spacy==3.7.2
+# transformers==4.36.2
+# torch==2.1.2
+
+# OCR
+pytesseract==0.3.10
+Pillow==10.2.0
+pdf2image==1.17.0
+pypdf2==3.0.1
+
+# Database
+sqlalchemy==2.0.25
+aiosqlite==0.19.0
+
+# Utilities
+httpx==0.26.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+aiofiles==23.2.1
+openpyxl==3.1.2

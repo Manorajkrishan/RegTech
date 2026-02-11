@@ -1,0 +1,190 @@
+{
+  "description": "UK Government GHG Conversion Factors 2024 (DEFRA/DESNZ) - Key factors for SME reporting",
+  "source": "https://www.gov.uk/government/collections/government-conversion-factors-for-company-reporting",
+  "year": 2024,
+  "unit": "kg CO2e",
+  "factors": {
+    "electricity": {
+      "category": "Scope 2",
+      "subcategory": "Purchased electricity",
+      "unit": "kWh",
+      "emission_factor": 0.22535,
+      "description": "UK grid electricity (generation + T&D)"
+    },
+    "natural_gas": {
+      "category": "Scope 1",
+      "subcategory": "Stationary combustion",
+      "unit": "kWh",
+      "emission_factor": 0.20435,
+      "description": "Natural gas"
+    },
+    "diesel_litres": {
+      "category": "Scope 1",
+      "subcategory": "Mobile combustion - Vehicles",
+      "unit": "litre",
+      "emission_factor": 2.68,
+      "description": "Diesel (average biofuel blend)"
+    },
+    "petrol_litres": {
+      "category": "Scope 1",
+      "subcategory": "Mobile combustion - Vehicles",
+      "unit": "litre",
+      "emission_factor": 2.31,
+      "description": "Petrol (average biofuel blend)"
+    },
+    "car_diesel_km": {
+      "category": "Scope 1",
+      "subcategory": "Business travel - Car",
+      "unit": "km",
+      "emission_factor": 0.17112,
+      "description": "Average car - diesel"
+    },
+    "car_petrol_km": {
+      "category": "Scope 1",
+      "subcategory": "Business travel - Car",
+      "unit": "km",
+      "emission_factor": 0.17092,
+      "description": "Average car - petrol"
+    },
+    "van_diesel_km": {
+      "category": "Scope 1",
+      "subcategory": "Business travel - Van",
+      "unit": "km",
+      "emission_factor": 0.28287,
+      "description": "Average van - diesel"
+    },
+    "train_national_km": {
+      "category": "Scope 3",
+      "subcategory": "Business travel - Rail",
+      "unit": "km",
+      "emission_factor": 0.03545,
+      "description": "National rail"
+    },
+    "train_underground_km": {
+      "category": "Scope 3",
+      "subcategory": "Business travel - Rail",
+      "unit": "km",
+      "emission_factor": 0.02746,
+      "description": "London Underground"
+    },
+    "flight_short_haul_km": {
+      "category": "Scope 3",
+      "subcategory": "Business travel - Air",
+      "unit": "km",
+      "emission_factor": 0.24621,
+      "description": "Short-haul international"
+    },
+    "flight_long_haul_km": {
+      "category": "Scope 3",
+      "subcategory": "Business travel - Air",
+      "unit": "km",
+      "emission_factor": 0.19512,
+      "description": "Long-haul international"
+    },
+    "hotel_night": {
+      "category": "Scope 3",
+      "subcategory": "Business travel - Accommodation",
+      "unit": "night",
+      "emission_factor": 25.2,
+      "description": "Hotel stay per night"
+    },
+    "freight_road_kg_km": {
+      "category": "Scope 3",
+      "subcategory": "Upstream transportation",
+      "unit": "tonne.km",
+      "emission_factor": 0.09696,
+      "description": "HGV - average"
+    },
+    "freight_sea_kg_km": {
+      "category": "Scope 3",
+      "subcategory": "Upstream transportation",
+      "unit": "tonne.km",
+      "emission_factor": 0.00828,
+      "description": "Cargo ship"
+    },
+    "paper_tonne": {
+      "category": "Scope 3",
+      "subcategory": "Purchased goods - Paper",
+      "unit": "tonne",
+      "emission_factor": 922,
+      "description": "Recycled paper"
+    },
+    "office_equipment_gbp": {
+      "category": "Scope 3",
+      "subcategory": "Purchased goods - Equipment",
+      "unit": "GBP",
+      "emission_factor": 0.218,
+      "description": "ICT equipment per £ spent"
+    },
+    "water_m3": {
+      "category": "Scope 3",
+      "subcategory": "Waste - Water",
+      "unit": "m3",
+      "emission_factor": 0.344,
+      "description": "Mains water supply"
+    },
+    "waste_general_kg": {
+      "category": "Scope 3",
+      "subcategory": "Waste disposal",
+      "unit": "kg",
+      "emission_factor": 0.02317,
+      "description": "General waste to landfill"
+    },
+    "waste_recycling_kg": {
+      "category": "Scope 3",
+      "subcategory": "Waste disposal",
+      "unit": "kg",
+      "emission_factor": -0.00978,
+      "description": "Recycling (avoided emissions)"
+    },
+    "fuel_oil_litre": {
+      "category": "Scope 1",
+      "subcategory": "Stationary combustion",
+      "unit": "litre",
+      "emission_factor": 2.96,
+      "description": "Heating oil"
+    },
+    "lpg_litre": {
+      "category": "Scope 1",
+      "subcategory": "Stationary combustion",
+      "unit": "litre",
+      "emission_factor": 1.51,
+      "description": "LPG"
+    },
+    "generic_materials_gbp": {
+      "category": "Scope 3",
+      "subcategory": "Purchased goods - Materials",
+      "unit": "GBP",
+      "emission_factor": 0.35,
+      "description": "Generic materials per £ spent (fallback)"
+    },
+    "generic_services_gbp": {
+      "category": "Scope 3",
+      "subcategory": "Purchased services",
+      "unit": "GBP",
+      "emission_factor": 0.12,
+      "description": "Generic services per £ spent (fallback)"
+    }
+  },
+  "category_keywords": {
+    "electricity": ["electricity", "electric", "power", "utility", "energy supplier", "edf", "british gas", "npower", "sse", "octopus", "ovo"],
+    "natural_gas": ["gas", "natural gas", "heating", "boiler", "british gas"],
+    "diesel_litres": ["diesel", "fuel", "petrol station", "bp", "shell", "esso", "texaco"],
+    "petrol_litres": ["petrol", "unleaded", "fuel"],
+    "car_diesel_km": ["car hire", "rental car", "business mileage", "mileage claim"],
+    "van_diesel_km": ["van", "delivery vehicle", "company van"],
+    "train_national_km": ["train", "rail", "lner", "gwr", "avanti", "crosscountry", "national rail"],
+    "train_underground_km": ["underground", "tube", "tfl", "london underground"],
+    "flight_short_haul_km": ["flight", "airline", "ba", "easyjet", "ryanair", "europe"],
+    "flight_long_haul_km": ["flight", "airline", "long haul", "international"],
+    "hotel_night": ["hotel", "accommodation", "travelodge", "premier inn", "marriott", "hilton"],
+    "freight_road_kg_km": ["freight", "delivery", "haulage", "courier", "dhl", "dpd", "ups", "fedex"],
+    "freight_sea_kg_km": ["shipping", "sea freight", "maritime"],
+    "paper_tonne": ["paper", "stationery", "office supplies", "printing"],
+    "office_equipment_gbp": ["computer", "laptop", "it equipment", "printer", "monitor"],
+    "water_m3": ["water", "water bill", "thames water"],
+    "waste_general_kg": ["waste", "bin", "disposal"],
+    "generic_materials_gbp": ["materials", "supplies", "inventory"],
+    "generic_services_gbp": ["services", "consultancy", "professional services"]
+  }
+}
