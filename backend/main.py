@@ -8,13 +8,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 
 from app.config import settings
 from app.carbon_engine import CarbonEngine
 from app.nlp_pipeline import NLPPipeline
 from app.ocr_service import extract_text_from_image, extract_text_from_pdf
-from app.database import init_db, AsyncSessionLocal, Transaction
+from app.database import init_db
 from app.report_generator import build_esg_scorecard, scorecard_to_html
 
 
