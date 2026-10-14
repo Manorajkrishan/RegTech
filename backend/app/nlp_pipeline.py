@@ -9,10 +9,10 @@ KNOWN_SUPPLIERS = (
 
 UNITS = {
     "kWh": r"([\d,]+(?:\.\d+)?)\s*kwh\b",
-    "litre": r"([\d,]+(?:\.\d+)?)\s*(?:litres?|liters?)\b",
-    "km": r"([\d,]+(?:\.\d+)?)\s*(?:km|kilometres?)\b",
+    "litres": r"([\d,]+(?:\.\d+)?)\s*(?:litres?|liters?)\b",
+    "passenger.km": r"([\d,]+(?:\.\d+)?)\s*(?:passenger[.\s-]?km|passenger[.\s-]?kilometres?)\b",
     "kg": r"([\d,]+(?:\.\d+)?)\s*kg\b",
-    "m3": r"([\d,]+(?:\.\d+)?)\s*(?:m3|m³)\b",
+    "cubic metres": r"([\d,]+(?:\.\d+)?)\s*(?:m3|m³|cubic\s+metres?)\b",
 }
 
 
