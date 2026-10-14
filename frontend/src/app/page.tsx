@@ -49,7 +49,7 @@ function UploadZone({ onResult }: { onResult: (data: unknown) => void }) {
   return (
     <div className="border-2 border-dashed border-teal-300 dark:border-teal-700 rounded-xl p-8 text-center bg-white dark:bg-slate-800">
       <p className="text-slate-600 dark:text-slate-400 mb-4">
-        Upload invoice (PDF or image) for AI extraction & carbon calculation
+        Upload invoice (PDF or image) for OCR extraction and manual activity review
       </p>
       <div
         onDrop={handleDrop}
@@ -103,7 +103,7 @@ function ScorecardView({ scorecard }: { scorecard: Scorecard }) {
       <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4">Total: {scorecard.total_tonnes_co2e.toFixed(2)} tonnes CO2e</h3>
         <p className="text-sm text-slate-500 mb-4">
-          {scorecard.transaction_count} transactions • UK SRS aligned
+          {scorecard.transaction_count} transactions • Not compliance-verified
         </p>
         <h4 className="font-medium mb-2">Breakdown by category</h4>
         <ul className="space-y-1 text-sm">
@@ -148,15 +148,18 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold">ESG RegTech Platform</h1>
           <p className="text-teal-200 text-sm mt-1">
-            AI-powered ESG compliance for SMEs • UK SRS aligned
+            Carbon accounting working draft • demo data only
           </p>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto p-6 space-y-8">
         <section>
-          <h2 className="text-xl font-semibold mb-4">Upload Invoice</h2>
+          <h2 className="text-xl font-semibold mb-4">Upload Invoice (demo only — no sensitive data)</h2>
           <UploadZone onResult={(d) => setUploadResult(d)} />
+          {uploadResult && (
+            <p className="mt-2 text-amber-700 text-sm">Review required: verify invoice quantity, activity unit, emission factor and Scope before calculating. No emissions are automatically claimed for an OCR upload.</p>
+          )}
           {uploadResult && (
             <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm">
               <pre className="whitespace-pre-wrap overflow-auto max-h-48">
@@ -175,7 +178,7 @@ export default function Home() {
               rel="noopener noreferrer"
               className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm inline-block"
             >
-              View Report (Print to PDF) →
+              View Unverified Draft →
             </a>
           </div>
           {loading ? (
@@ -184,13 +187,13 @@ export default function Home() {
             <ScorecardView scorecard={scorecard} />
           ) : (
             <p className="text-slate-500">
-              No data. Start backend and run: python scripts/generate_synthetic_invoices.py
+              No calculated rows. Start backend, or provide verified quantities and units.
             </p>
           )}
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-4">Sample Transactions</h2>
+          <h2 className="text-xl font-semibold mb-4">Sample Transactions (synthetic)</h2>
           <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl">
             <table className="w-full text-sm">
               <thead>
@@ -218,7 +221,7 @@ export default function Home() {
         </section>
 
         <footer className="text-center text-slate-500 text-sm py-8">
-          ESG RegTech Platform • UK SRS aligned • DEFRA conversion factors 2024
+          ESG RegTech Platform • Not compliance-verified • DEFRA conversion factors 2024
         </footer>
       </main>
     </div>
