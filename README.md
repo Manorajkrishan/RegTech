@@ -65,7 +65,7 @@ Visit http://localhost:3000, create a workspace, add draft activities, review an
 
 \`\`\`bash
 cd backend
-pytest -q
+python -m pytest -q
 cd ../frontend
 npm run build
 \`\`\`
