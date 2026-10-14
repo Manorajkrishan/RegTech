@@ -17,7 +17,7 @@ A Next.js + FastAPI workspace for organisations to record measured emissions act
 
 ## Critical factor-data restriction
 
-The original \`backend/data/emission_factors.json\` is still a **legacy curated 2024 sample**. Its individual numeric mappings have **not** been independently reconciled against the original official Excel row/column values. These are identified prominently in the API/UI; **do not submit outputs externally** as official 2026-compliant results.
+The application now loads \`backend/data/emission_factors_2026.json\` by default. It contains a **selected 11-factor subset** reconciled by source row/ID, unit, scope and kg CO2e amount against the official revised July 2026 flat workbook (SHA-256: \`a9a455ab396dae226d510c7be6233748416d490c41a5d20f3dc7a0c45feecd5e\`). These calculations are still **not an independently assured carbon inventory or UK SRS-compliant disclosure**: users must verify activity quantities, reporting boundaries, ownership, completeness and methodology. The old 2024 sample remains stored separately for historical reference and tests.
 
 The 2026 UK government flat file is officially maintained here:
 
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 python scripts/sync_defra_2026.py
 \`\`\`
 
-The importer downloads that workbook from the official assets domain and writes \`backend/data/defra_2026_raw_catalogue.json\` with every source row, a SHA-256 digest, original units, and retrieval metadata. It deliberately **does not auto-map workbook factors to the 23 prototype factor IDs**. A sustainability/accounting reviewer must reconcile exact categories (including Scope 1 / Scope 2 / Scope 3 ownership), units, CO2e values, geographic/year applicability, and lifecycle boundaries before activating a reviewed JSON file with \`FACTOR_PATH\`. Do not infer factor values from monetary transaction totals. Never relabel 2024 mappings as 2026.
+The importer downloads that workbook from the official assets domain and writes \`backend/data/defra_2026_raw_catalogue.json\` with every source row, a SHA-256 digest, original units, and retrieval metadata. The importer creates an unreviewed full catalogue and \`python scripts/verify_2026_catalogue.py\` reconciles every selected active factor against exact workbook rows. This does **not** automatically activate all 8,746 raw rows. A sustainability/accounting reviewer must still reconcile reporting boundaries, methodology, applicability, and any expansion of the curated subset before external reporting. A reviewed future JSON set can be activated using \`FACTOR_PATH\`. Do not infer factor values from monetary transaction totals. Never relabel 2024 mappings as 2026.
 
 UK SRS S1/S2 describe broader sustainability disclosures; a carbon scorecard alone does not establish alignment or reporting obligations. For listed issuers, check FCA rules effective for accounting periods starting **1 January 2027**. SME applicability is not automatic.
 
