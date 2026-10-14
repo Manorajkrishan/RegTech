@@ -25,7 +25,7 @@ carbon_engine = CarbonEngine()
 nlp = NLPPipeline(carbon_engine)
 
 class TransactionInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
     description: str = Field(min_length=1, max_length=2000)
     supplier: str = Field(default="", max_length=255)
     amount_gbp: float = Field(default=0, ge=0)
