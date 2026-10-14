@@ -1,0 +1,111 @@
+{
+  "description": "Selected 2026 UK Government GHG conversion factors sourced from revised 31 July 2026 flat workbook; exact source rows checked against official workbook, accounting boundaries not independently assured.",
+  "year": 2026,
+  "source": "https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2026",
+  "source_file": "ghg-conversion-factors-2026-flat-format-revised.xlsx",
+  "source_revision": "31 July 2026",
+  "source_sha256": "a9a455ab396dae226d510c7be6233748416d490c41a5d20f3dc7a0c45feecd5e",
+  "unit": "kg CO2e",
+  "factor_status": "source_row_reconciled_not_independently_assured",
+  "factors": {
+    "electricity": {
+      "category": "Scope 2",
+      "subcategory": "UK electricity generation (location-based)",
+      "unit": "kWh",
+      "emission_factor": 0.13096,
+      "source_row": 3066,
+      "source_id": "7_400_4000_5_1",
+      "note": "Electricity: UK, generation only; excludes separate Scope 3 transmission and distribution"
+    },
+    "natural_gas_gross_kwh": {
+      "category": "Scope 1",
+      "subcategory": "Natural gas combustion (gross calorific value)",
+      "unit": "kWh (Gross CV)",
+      "emission_factor": 0.18231,
+      "source_row": 83,
+      "source_id": "1_100_1004_6_1",
+      "note": "Owned or controlled natural-gas combustion; use gross CV billing basis"
+    },
+    "natural_gas_net_kwh": {
+      "category": "Scope 1",
+      "subcategory": "Natural gas combustion (net calorific value)",
+      "unit": "kWh (Net CV)",
+      "emission_factor": 0.20199,
+      "source_row": 79,
+      "source_id": "1_100_1004_7_1",
+      "note": "Owned or controlled natural-gas combustion; use net CV billing basis"
+    },
+    "diesel_litres": {
+      "category": "Scope 1",
+      "subcategory": "Diesel average biofuel blend (combustion)",
+      "unit": "litres",
+      "emission_factor": 2.58354,
+      "source_row": 187,
+      "source_id": "1_101_1011_8_1",
+      "note": "Owned or controlled combustion only; upstream fuel emissions are separate Scope 3"
+    },
+    "petrol_litres": {
+      "category": "Scope 1",
+      "subcategory": "Petrol average biofuel blend (combustion)",
+      "unit": "litres",
+      "emission_factor": 2.075,
+      "source_row": 283,
+      "source_id": "1_101_1017_8_1",
+      "note": "Owned or controlled combustion only; upstream fuel emissions are separate Scope 3"
+    },
+    "train_national_passenger_km": {
+      "category": "Scope 3",
+      "subcategory": "National rail business travel",
+      "unit": "passenger.km",
+      "emission_factor": 0.03092,
+      "source_row": 5461,
+      "source_id": "25_315_3147_11_1",
+      "note": "Passenger-kilometres for national rail; upstream fuel may be separate"
+    },
+    "water_supply_m3": {
+      "category": "Scope 3",
+      "subcategory": "Water supply",
+      "unit": "cubic metres",
+      "emission_factor": 0.1913,
+      "source_row": 3944,
+      "source_id": "17_404_4005_1_1",
+      "note": "Purchased water supply in cubic metres"
+    },
+    "hotel_uk_room_night": {
+      "category": "Scope 3",
+      "subcategory": "Hotel stay UK (excluding London-specific variant)",
+      "unit": "Room per night",
+      "emission_factor": 10.4,
+      "source_row": 7395,
+      "source_id": "29_600_4000_13_1",
+      "note": "Room nights UK, excluding separate London-specific factor"
+    },
+    "hotel_london_room_night": {
+      "category": "Scope 3",
+      "subcategory": "Hotel stay UK (London)",
+      "unit": "Room per night",
+      "emission_factor": 11.5,
+      "source_row": 7396,
+      "source_id": "29_600_4001_13_1",
+      "note": "Use London-specific factor only for hotels in London"
+    },
+    "flight_short_haul_with_rf": {
+      "category": "Scope 3",
+      "subcategory": "Short-haul flight average passenger, with radiative forcing",
+      "unit": "passenger.km",
+      "emission_factor": 0.12786,
+      "source_row": 4418,
+      "source_id": "21_316_3162_11_1",
+      "note": "UK short-haul passenger travel; includes RF uplift"
+    },
+    "flight_short_haul_without_rf": {
+      "category": "Scope 3",
+      "subcategory": "Short-haul flight average passenger, without radiative forcing",
+      "unit": "passenger.km",
+      "emission_factor": 0.07559,
+      "source_row": 4422,
+      "source_id": "21_316_3163_11_1",
+      "note": "UK short-haul passenger travel; excludes RF uplift"
+    }
+  }
+}
