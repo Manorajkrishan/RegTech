@@ -192,7 +192,7 @@ export default function Home() {
             <div className="field-grid">
               <label className="span-2">Activity description<input required minLength={3} value={form.description} placeholder="e.g. Electricity consumed in April" onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
               <label>Supplier / source<input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="e.g. Utility provider" /></label>
-              <label>Activity date<input type="date" value={form.activity_date} onChange={(e) => setForm({ ...form, activity_date: e.target.value })} /></label>
+              <label>Activity date<input required type="date" value={form.activity_date} onChange={(e) => setForm({ ...form, activity_date: e.target.value })} /></label>
               <label className="span-2">Emission factor<select required value={form.factor_id} onChange={(e) => chooseFactor(e.target.value)}><option value="">Select a physical activity factor</option>{supported.map((factor) => <option key={factor.id} value={factor.id}>{factor.name} · {factor.id} ({factor.unit})</option>)}</select></label>
               <label>Activity quantity<input required min="0.000001" step="any" type="number" value={form.quantity} placeholder="Enter measured quantity" onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
               <label>Unit<input value={form.unit} readOnly placeholder="From selected factor" /></label>
