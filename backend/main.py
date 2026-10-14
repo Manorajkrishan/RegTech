@@ -2,7 +2,7 @@
 import csv
 import io
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 from uuid import uuid4
 
@@ -52,7 +52,7 @@ class Login(BaseModel):
 class ActivityIn(BaseModel):
     description: str = Field(min_length=3, max_length=1000)
     supplier: str = Field(default="", max_length=200)
-    activity_date: str = Field(default="", max_length=10)
+    activity_date: str = Field(min_length=10, max_length=10)
     factor_id: str
     quantity: float = Field(gt=0, le=1e12)
     unit: str
@@ -91,6 +91,12 @@ def audit(user, row, action):
 
 
 def set_activity(row, payload):
+    try:
+        activity_year = date.fromisoformat(payload.activity_date).year
+    except ValueError as error:
+        raise HTTPException(422, "Activity date must be a valid ISO date") from error
+    if activity_year != carbon_engine.year:
+        raise HTTPException(422, "Activity year must match the selected emission factor vintage (" + str(carbon_engine.year) + ")")
     try:
         result = carbon_engine.calculate(CarbonInput(
             factor_id=payload.factor_id, quantity=payload.quantity,
