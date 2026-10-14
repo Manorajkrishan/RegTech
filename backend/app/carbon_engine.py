@@ -1,11 +1,9 @@
-"""
-Carbon calculation engine - applies DEFRA emission factors to transactions.
-"""
+"""Conservative emissions calculations: activity units must match factor units."""
 import json
+import math
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
-
 
 class CarbonResult(BaseModel):
     category: str
@@ -15,14 +13,16 @@ class CarbonResult(BaseModel):
     emission_factor: float
     emissions_kg_co2e: float
     scope: str
-
+    factor_year: int
+    method: str = "activity-based"
 
 class CarbonEngine:
     def __init__(self, factors_path: Optional[Path] = None):
         path = factors_path or Path(__file__).parent.parent / "data" / "emission_factors.json"
-        with open(path) as f:
-            data = json.load(f)
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
         self.factors = data["factors"]
+        self.factor_year = int(data["year"])
         self.category_keywords = data.get("category_keywords", {})
 
     def get_factor(self, category: str) -> Optional[dict]:
@@ -32,80 +32,49 @@ class CarbonEngine:
         fac = self.get_factor(category)
         if not fac:
             return None
-        factor_val = fac["emission_factor"]
-        emissions = quantity * factor_val
-        scope = fac["category"]
+        if not isinstance(quantity, (int, float)) or not math.isfinite(quantity) or quantity < 0:
+            raise ValueError("Activity quantity must be non-negative and finite")
+        if unit_hint is not None and unit_hint != fac["unit"]:
+            raise ValueError(f"Unit mismatch for {category}: expected {fac['unit']}, got {unit_hint}")
         return CarbonResult(
             category=category,
             subcategory=fac["subcategory"],
-            quantity=quantity,
+            quantity=float(quantity),
             unit=fac["unit"],
-            emission_factor=factor_val,
-            emissions_kg_co2e=round(emissions, 2),
-            scope=scope,
+            emission_factor=fac["emission_factor"],
+            emissions_kg_co2e=round(quantity * fac["emission_factor"], 2),
+            scope=fac["category"],
+            factor_year=self.factor_year,
         )
 
     def classify_from_text(self, description: str, supplier: str = "") -> Optional[str]:
-        """Map free text to emission category using keyword matching."""
         text = f"{description} {supplier}".lower()
         for cat, keywords in self.category_keywords.items():
             if any(kw in text for kw in keywords):
                 return cat
-        # Fallbacks
-        if "electric" in text or "power" in text:
-            return "electricity"
-        if "gas" in text and "natural" in text:
-            return "natural_gas"
-        if "diesel" in text or "fuel" in text:
-            return "diesel_litres"
-        if "train" in text or "rail" in text:
-            return "train_national_km"
-        if "flight" in text or "airline" in text:
-            return "flight_short_haul_km"
-        if "hotel" in text:
-            return "hotel_night"
-        if "delivery" in text or "freight" in text or "courier" in text:
-            return "freight_road_kg_km"
-        if "paper" in text or "stationery" in text:
-            return "paper_tonne"
-        if "laptop" in text or "computer" in text or "printer" in text:
-            return "office_equipment_gbp"
-        if "water" in text:
-            return "water_m3"
-        if "waste" in text:
-            return "waste_general_kg"
-        if "material" in text or "supplies" in text:
-            return "generic_materials_gbp"
-        return "generic_services_gbp"
+        mapping = [
+            ("electric", "electricity"), ("natural gas", "natural_gas"),
+            ("diesel", "diesel_litres"), ("train", "train_national_km"),
+            ("flight", "flight_short_haul_km"), ("hotel", "hotel_night"),
+            ("water", "water_m3"), ("waste", "waste_general_kg"),
+        ]
+        return next((cat for needle, cat in mapping if needle in text), None)
 
-    def process_transaction(self, description: str, amount_gbp: float, quantity: Optional[float] = None,
-                            unit: Optional[str] = None, category: Optional[str] = None,
-                            supplier: str = "") -> Optional[CarbonResult]:
-        """Process a transaction and return carbon result."""
+    def process_transaction(self, description: str, amount_gbp: float,
+                            quantity: Optional[float] = None, unit: Optional[str] = None,
+                            category: Optional[str] = None, supplier: str = "") -> Optional[CarbonResult]:
         cat = category or self.classify_from_text(description, supplier)
-        fac = self.get_factor(cat)
+        fac = self.get_factor(cat) if cat else None
         if not fac:
             return None
-
-        u = fac["unit"]
-        if quantity is not None and unit and unit == u:
-            q = quantity
-        elif u == "GBP":
-            q = amount_gbp
-        elif u == "kWh" and "electric" in (description + supplier).lower():
-            q = quantity if quantity else amount_gbp * 0.15  # rough £/kWh
-        elif u == "litre":
-            q = quantity if quantity else amount_gbp / 1.5  # rough £/litre
-        elif u == "km":
-            q = quantity if quantity else amount_gbp * 0.15  # rough
-        elif u == "night":
-            q = quantity if quantity else 1
-        elif u == "tonne.km":
-            q = quantity if quantity else amount_gbp * 0.01
-        elif u == "kg":
-            q = quantity if quantity else amount_gbp * 0.5
-        elif u == "m3":
-            q = quantity if quantity else amount_gbp * 0.5
-        else:
-            q = amount_gbp  # fallback to GBP
-        return self.calculate(cat, q)
+        # GBP factors are spend-based proxies and must be explicitly labeled as such.
+        if fac["unit"] == "GBP":
+            if not isinstance(amount_gbp, (int, float)) or not math.isfinite(amount_gbp) or amount_gbp < 0:
+                raise ValueError("Invalid GBP amount")
+            result = self.calculate(cat, amount_gbp, "GBP")
+            result.method = "spend-based-estimate"
+            return result
+        # NEVER infer kWh, litres, km or kg from the invoice amount.
+        if quantity is None or not unit:
+            return None
+        return self.calculate(cat, float(quantity), unit)
