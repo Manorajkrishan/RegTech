@@ -81,4 +81,4 @@ def test_rejected_bad_inputs_and_fake_upload():
             "/api/invoices/extract", headers=auth,
             files={"file": ("fake.pdf", b"not-a-pdf", "application/pdf")}
         ).status_code == 415
-        assert client.get("/api/factors", headers=auth).json()["factor_year"] == 2024
+        assert client.get("/api/factors", headers=auth).json()["factor_year"] == 2026
