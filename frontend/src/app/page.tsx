@@ -39,7 +39,7 @@ function UploadZone({ onResult }: { onResult: (data: unknown) => void }) {
     try {
       const res = await processInvoice(file);
       onResult(res);
-    } catch (err) {
+    } catch {
       setError("Failed to process. Is the backend running?");
     } finally {
       setLoading(false);
