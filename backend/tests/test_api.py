@@ -82,3 +82,13 @@ def test_rejected_bad_inputs_and_fake_upload():
             files={"file": ("fake.pdf", b"not-a-pdf", "application/pdf")}
         ).status_code == 415
         assert client.get("/api/factors", headers=auth).json()["factor_year"] == 2026
+
+
+def test_activity_date_must_match_factor_year():
+    with TestClient(app) as client:
+        auth = register(client, identity())
+        invalid = activity()
+        invalid["activity_date"] = "2024-01-31"
+        response = client.post("/api/activities", headers=auth, json=invalid)
+        assert response.status_code == 422
+        assert "factor vintage" in response.json()["detail"]
