@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.db
+*.sqlite3
+.env
+uploads/
+data/defra_2026_raw_catalogue.json

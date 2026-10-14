@@ -1,42 +1,84 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
-from datetime import datetime
+"""Organisation-isolated storage. Schema migration tooling needed before production."""
+from datetime import datetime, timezone
+from uuid import uuid4
+from sqlalchemy import String, Float, DateTime, ForeignKey, Text, Integer
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from .config import settings
 
-engine = create_async_engine(settings.db_url, echo=settings.debug)
-AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-Base = declarative_base()
+
+def new_id():
+    return str(uuid4())
 
 
-class Transaction(Base):
-    __tablename__ = "transactions"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    invoice_id = Column(String(50), nullable=True)
-    supplier = Column(String(255), nullable=True)
-    description = Column(Text, nullable=True)
-    amount_gbp = Column(Float, nullable=False)
-    quantity = Column(Float, nullable=True)
-    unit = Column(String(50), nullable=True)
-    category = Column(String(100), nullable=True)
-    emissions_kg_co2e = Column(Float, nullable=True)
-    scope = Column(String(20), nullable=True)
-    date = Column(String(20), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+def now():
+    return datetime.now(timezone.utc)
 
 
-class Report(Base):
-    __tablename__ = "reports"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False)
-    scope1_kg = Column(Float, default=0)
-    scope2_kg = Column(Float, default=0)
-    scope3_kg = Column(Float, default=0)
-    total_kg = Column(Float, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+class Base(DeclarativeBase):
+    pass
+
+
+class Organisation(Base):
+    __tablename__ = "organisations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organisations.id"), index=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(String(20), default="owner")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organisations.id"), index=True)
+    description: Mapped[str] = mapped_column(Text)
+    supplier: Mapped[str] = mapped_column(String(200), default="")
+    activity_date: Mapped[str] = mapped_column(String(10), default="")
+    factor_id: Mapped[str] = mapped_column(String(100))
+    factor_year: Mapped[int] = mapped_column(Integer)
+    factor_value: Mapped[float] = mapped_column(Float)
+    factor_source: Mapped[str] = mapped_column(Text)
+    quantity: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(50))
+    scope: Mapped[str] = mapped_column(String(10))
+    emissions_kg: Mapped[float] = mapped_column(Float)
+    evidence_reference: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(12), default="draft")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organisations.id"), index=True)
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    activity_id: Mapped[str] = mapped_column(String(36))
+    action: Mapped[str] = mapped_column(String(25))
+    details: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+engine = create_async_engine(settings.db_url, echo=False)
+SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+
+
+async def get_db():
+    async with SessionLocal() as db:
+        yield db
