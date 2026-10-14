@@ -1,0 +1,44 @@
+name: Verify official 2026 factor dataset
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/data-source-2026.yml'
+      - 'backend/scripts/sync_defra_2026.py'
+
+jobs:
+  download-review-catalogue:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install openpyxl>=3.1.5
+      - name: Fetch official July 2026 revised workbook and export source rows
+        run: python scripts/sync_defra_2026.py
+      - name: Validate output and provenance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path("data/defra_2026_raw_catalogue.json").read_text())
+          assert p["year"] == 2026
+          assert p["status"] == "unreviewed_import_not_approved_for_calculation"
+          assert len(p["sha256"]) == 64
+          assert sum(len(rows) for rows in p["sheets"].values()) > 500
+          print("Verified official revised 2026 catalogue")
+          print("sha256", p["sha256"])
+          print("sheets", {k: len(v) for k, v in p["sheets"].items()})
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: defra-desnz-2026-unreviewed-source-rows
+          path: backend/data/defra_2026_raw_catalogue.json
+          if-no-files-found: error
+          retention-days: 30
