@@ -1,0 +1,11 @@
+**/__pycache__/
+**/*.pyc
+**/*.db
+**/*.sqlite3
+**/.env
+**/uploads/
+**/node_modules/
+**/.next/
+**/coverage/
+**/.pytest_cache/
+**/data/defra_2026_raw_catalogue.json

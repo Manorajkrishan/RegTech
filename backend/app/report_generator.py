@@ -1,81 +1,61 @@
-"""
-ESG report generator - creates audit-ready scorecard data and PDF-ready content.
-"""
-from datetime import datetime
-from typing import List, Dict, Any
+"""Conservative organisation-specific report. Only reviewed records are included."""
+from collections import defaultdict
+from datetime import datetime, timezone
+from html import escape
 
 
-def build_esg_scorecard(transactions: List[Dict], scope_totals: Dict[str, float]) -> Dict[str, Any]:
-    """Build ESG scorecard structure aligned with UK SRS."""
-    total = scope_totals.get("scope1", 0) + scope_totals.get("scope2", 0) + scope_totals.get("scope3", 0)
+def build_report(activities: list, org_name: str) -> dict:
+    scopes = {"Scope 1": 0.0, "Scope 2": 0.0, "Scope 3": 0.0}
+    categories = defaultdict(float)
+    years = set()
+    items = []
+    for row in activities:
+        scopes[row.scope] += row.emissions_kg
+        categories[row.factor_id] += row.emissions_kg
+        years.add(row.factor_year)
+        items.append({
+            "id": row.id, "description": row.description, "scope": row.scope,
+            "quantity": row.quantity, "unit": row.unit, "factor_id": row.factor_id,
+            "emissions_kg_co2e": row.emissions_kg, "evidence_reference": row.evidence_reference,
+            "factor_year": row.factor_year, "factor_source": row.factor_source,
+            "activity_date": row.activity_date
+        })
+    total = sum(scopes.values())
     return {
-        "report_date": datetime.utcnow().isoformat(),
-        "standards": "UK Sustainability Reporting Standards (UK SRS) 2026",
-        "scope_emissions": {
-            "Scope 1 - Direct emissions": round(scope_totals.get("scope1", 0), 2),
-            "Scope 2 - Indirect (energy)": round(scope_totals.get("scope2", 0), 2),
-            "Scope 3 - Value chain": round(scope_totals.get("scope3", 0), 2),
-        },
-        "total_kg_co2e": round(total, 2),
-        "total_tonnes_co2e": round(total / 1000, 2),
-        "transaction_count": len(transactions),
-        "breakdown_by_category": _aggregate_by_category(transactions),
-        "transactions": transactions[:50],  # Top 50 for report
+        "organisation": org_name,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "status": "Draft activity-based emissions estimate (not independently assured)",
+        "disclaimer": "Not an audit, certification, UK SRS statement of compliance, or regulatory submission. Verify factor vintages, ownership, boundaries, completeness and evidence with a qualified reviewer.",
+        "scope_emissions": {scope: round(value, 3) for scope, value in scopes.items()},
+        "total_kg_co2e": round(total, 3), "total_tonnes_co2e": round(total / 1000, 6),
+        "approved_activity_count": len(items), "factor_years": sorted(years),
+        "breakdown_by_factor": {k: round(v, 3) for k, v in sorted(categories.items())},
+        "activities": items,
     }
 
 
-def _aggregate_by_category(transactions: List[Dict]) -> Dict[str, float]:
-    agg = {}
-    for t in transactions:
-        cat = t.get("category") or "Uncategorized"
-        agg[cat] = agg.get(cat, 0) + (t.get("emissions_kg_co2e") or 0)
-    return {k: round(v, 2) for k, v in sorted(agg.items(), key=lambda x: -x[1])}
-
-
-def scorecard_to_html(scorecard: Dict) -> str:
-    """Convert scorecard to HTML for PDF export."""
-    s = scorecard
-    rows = "\n".join(
-        f"<tr><td>{cat}</td><td>{em:.2f}</td></tr>"
-        for cat, em in s["scope_emissions"].items()
+def render_html(report: dict) -> str:
+    lines = "".join(
+        "<tr><td>%s</td><td>%s</td></tr>" % (escape(name), value)
+        for name, value in report["scope_emissions"].items()
     )
-    cat_rows = "\n".join(
-        f"<tr><td>{cat}</td><td>{em:.2f}</td></tr>"
-        for cat, em in s.get("breakdown_by_category", {}).items()
+    evidence = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%.3f</td><td>%s</td></tr>" % (
+            escape(row["description"]), escape(row["factor_id"]),
+            escape(str(row["quantity"]) + " " + row["unit"]),
+            row["emissions_kg_co2e"], escape(row["evidence_reference"])
+        ) for row in report["activities"]
     )
-    return f"""
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>ESG Scorecard</title>
-<style>
-  body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }}
-  h1 {{ color: #1a5f4a; }} h2 {{ color: #2d7a63; margin-top: 24px; }}
-  table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
-  th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
-  th {{ background: #1a5f4a; color: white; }}
-  .total {{ font-weight: bold; font-size: 1.2em; }}
-</style>
-</head>
-<body>
-  <h1>ESG Compliance Scorecard</h1>
-  <p>Generated: {s['report_date'][:19]} UTC</p>
-  <p>Aligned with: {s['standards']}</p>
-
-  <h2>Emissions Summary</h2>
-  <table>
-    <tr><th>Scope</th><th>kg CO2e</th></tr>
-    {rows}
-  </table>
-  <p class="total">Total: {s['total_tonnes_co2e']} tonnes CO2e</p>
-
-  <h2>Breakdown by Category</h2>
-  <table>
-    <tr><th>Category</th><th>kg CO2e</th></tr>
-    {cat_rows}
-  </table>
-
-  <h2>Transaction Sample</h2>
-  <p>{s['transaction_count']} transactions processed.</p>
-</body>
-</html>
-"""
+    return ("""<!doctype html><html><head><meta charset="utf-8">
+    <title>Draft carbon inventory</title><style>body{font:15px system-ui;max-width:960px;
+    margin:40px auto;color:#16312d;padding:20px}table{border-collapse:collapse;width:100%}
+    td,th{border:1px solid #ccc;padding:10px;text-align:left}.warning{background:#fff5d6;padding:15px}</style>
+    </head><body><h1>Draft carbon inventory — %s</h1><p>%s</p>
+    <p class="warning">%s</p><h2>Scope totals (kg CO₂e)</h2><table>%s</table>
+    <h2>Reviewed activity evidence</h2><table><tr><th>Description</th><th>Factor</th>
+    <th>Activity</th><th>kg CO₂e</th><th>Evidence reference</th></tr>%s</table>
+    <p>Factor vintages: %s. Generated: %s</p></body></html>""" % (
+        escape(report["organisation"]), escape(report["status"]), escape(report["disclaimer"]),
+        lines, evidence, ", ".join(str(x) for x in report["factor_years"]),
+        escape(report["generated_at"])
+    ))
