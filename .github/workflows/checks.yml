@@ -16,7 +16,7 @@ jobs:
           python-version: "3.12"
       - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
       - run: pip install -r requirements.txt pytest
-      - run: pytest -q tests
+      - run: python -m pytest -q tests
   frontend-build:
     runs-on: ubuntu-latest
     defaults:
