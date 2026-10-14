@@ -157,10 +157,10 @@ export default function Home() {
         <section>
           <h2 className="text-xl font-semibold mb-4">Upload Invoice (demo only — no sensitive data)</h2>
           <UploadZone onResult={(d) => setUploadResult(d)} />
-          {uploadResult && (
+          {uploadResult !== null && (
             <p className="mt-2 text-amber-700 text-sm">Review required: verify invoice quantity, activity unit, emission factor and Scope before calculating. No emissions are automatically claimed for an OCR upload.</p>
           )}
-          {uploadResult && (
+          {uploadResult !== null && (
             <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm">
               <pre className="whitespace-pre-wrap overflow-auto max-h-48">
                 {JSON.stringify(uploadResult, null, 2)}
