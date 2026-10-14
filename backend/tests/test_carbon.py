@@ -1,5 +1,6 @@
 import pytest
 from app.carbon_engine import CarbonEngine, CarbonInput
+from pathlib import Path
 from app.nlp_pipeline import extract_hints
 from app.ocr_service import extract_text
 from fastapi import HTTPException
@@ -13,7 +14,8 @@ def engine():
 def test_exact_units(engine):
     row = engine.calculate(CarbonInput(factor_id="electricity", quantity=100, unit="kWh", scope="Scope 2"))
     assert row["emissions_kg_co2e"] == round(100 * row["factor_value"], 5)
-    assert row["factor_year"] == 2024
+    assert row["factor_year"] == 2026
+    assert "source row 3066" in row["factor_source"]
 
 
 def test_wrong_units_rejected(engine):
@@ -22,8 +24,9 @@ def test_wrong_units_rejected(engine):
 
 
 def test_spend_factors_disabled(engine):
+    legacy = CarbonEngine(Path(__file__).resolve().parents[1] / "data" / "emission_factors.json")
     with pytest.raises(ValueError, match="Spend-based"):
-        engine.calculate(CarbonInput(factor_id="office_equipment_gbp", quantity=100, unit="GBP", scope="Scope 3"))
+        legacy.calculate(CarbonInput(factor_id="office_equipment_gbp", quantity=100, unit="GBP", scope="Scope 3"))
 
 
 def test_unknown_factor_rejected(engine):
@@ -48,3 +51,8 @@ def test_invalid_file_does_not_return_sample():
     with pytest.raises(HTTPException) as error:
         extract_text(b"not a PDF or image", "fake.pdf")
     assert error.value.status_code == 415
+
+
+def test_source_scope_not_arbitrarily_edited(engine):
+    with pytest.raises(ValueError, match="Scope mismatch"):
+        engine.calculate(CarbonInput(factor_id="electricity", quantity=50, unit="kWh", scope="Scope 1"))
