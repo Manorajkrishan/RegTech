@@ -1,0 +1,37 @@
+name: One-time Next.js dependency upgrade
+on:
+  push:
+    branches:
+      - feat/nextjs-16-security-upgrade-2026
+    paths:
+      - .github/workflows/upgrade-next-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve audited, pinned framework dependencies and lock file
+        run: |
+          cd frontend
+          npm install --no-fund --no-audit
+          node -e "const p=require('./package-lock.json');if(!p.packages['node_modules/next'].version.startsWith('16.4.1'))process.exit(1)"
+      - name: Commit regenerated package lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json frontend/package.json frontend/eslint.config.mjs
+          git diff --cached --quiet || git commit -m "chore: regenerate lockfile for patched Next.js 16.4.1"
+          git push origin HEAD:feat/nextjs-16-security-upgrade-2026
+      - name: Build with new framework
+        run: cd frontend && npm run build
+      - name: Lint with ESLint 9 flat configuration
+        run: cd frontend && npm run lint
