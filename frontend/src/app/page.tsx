@@ -336,7 +336,7 @@ export default function Home() {
           <TeamBilling mode={section} token={token} role={user?.role || "viewer"}
             onNotice={setNotice} onError={setError} />
         </>}
-        <footer><span>RegTech Carbon Workspace · Pilot version 0.2</span><span>Draft estimates only — not regulatory assurance</span></footer>
+        <footer><span>RegTech Carbon Workspace · Pilot version 0.4</span><span>Draft estimates only — not regulatory assurance</span></footer>
       </div>
     </main>
   </div>;
