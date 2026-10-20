@@ -18,7 +18,8 @@ def upgrade():
     op.add_column("organisations", sa.Column("subscription_id", sa.String(100), nullable=True))
     op.add_column("organisations", sa.Column("subscription_price_id", sa.String(100), nullable=True))
     op.add_column("organisations", sa.Column("subscription_event_created", sa.Integer(), nullable=False, server_default="0"))
-    op.create_unique_constraint("uq_org_stripe_customer_id", "organisations", ["stripe_customer_id"])
+    with op.batch_alter_table("organisations") as batch:
+        batch.create_unique_constraint("uq_org_stripe_customer_id", ["stripe_customer_id"])
     op.add_column("users", sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()))
     op.create_table(
         "team_invitations",
@@ -47,7 +48,8 @@ def downgrade():
     op.drop_index("ix_team_invitations_org_id", table_name="team_invitations")
     op.drop_table("team_invitations")
     op.drop_column("users", "is_active")
-    op.drop_constraint("uq_org_stripe_customer_id", "organisations", type_="unique")
+    with op.batch_alter_table("organisations") as batch:
+        batch.drop_constraint("uq_org_stripe_customer_id", type_="unique")
     op.drop_column("organisations", "subscription_event_created")
     op.drop_column("organisations", "subscription_price_id")
     op.drop_column("organisations", "subscription_id")
