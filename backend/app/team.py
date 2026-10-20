@@ -109,7 +109,9 @@ async def invite(
         TeamInvitation.expires_at > utc_now()
     )):
         raise HTTPException(409, "An invitation is already pending")
-    org = await db.get(Organisation, user.org_id)
+    org = await db.scalar(select(Organisation).where(
+        Organisation.id == user.org_id
+    ).with_for_update())
     if org.subscription_status not in ("active", "trialing"):
         members = await db.scalar(select(func.count(User.id)).where(
             User.org_id == user.org_id, User.is_active.is_(True)
