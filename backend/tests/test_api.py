@@ -209,3 +209,81 @@ def test_login_lockout_after_repeated_failures():
         assert client.post("/api/auth/login", json={
             "email": account["email"], "password": account["password"]
         }).status_code == 401
+
+
+
+def test_team_workflow_and_role_permissions(monkeypatch):
+    from app import team as team_module
+    from app.rate_limit import reset_for_tests
+
+    reset_for_tests()
+    invitations = []
+
+    async def deliver(email, organization, secret):
+        invitations.append((email, secret))
+
+    monkeypatch.setattr(team_module, "send_invite", deliver)
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        separate = register(client, identity())
+        email = "team-" + str(uuid4())[:10] + "@example.com"
+        invited = client.post("/api/team/invitations", headers=owner,
+                              json={"email": email, "role": "editor"})
+        assert invited.status_code == 201, invited.text
+        accepted = client.post("/api/team/accept", json={
+            "token": invitations[-1][1], "password": "InvitePasswordValid2026!"
+        })
+        assert accepted.status_code == 200, accepted.text
+        editor = {"Authorization": "Bearer " + accepted.json()["access_token"]}
+        assert client.post("/api/team/accept", json={
+            "token": invitations[-1][1], "password": "InvitePasswordValid2026!"
+        }).status_code == 400
+        assert client.post("/api/team/invitations", headers=editor, json={
+            "email": "cannot@example.com", "role": "viewer"
+        }).status_code == 403
+        draft = client.post("/api/activities", headers=editor, json=activity())
+        assert draft.status_code == 201, draft.text
+        activity_id = draft.json()["id"]
+        assert client.patch("/api/activities/" + activity_id + "/approve",
+                            headers=editor).status_code == 403
+        assert client.patch("/api/activities/" + activity_id + "/approve",
+                            headers=separate).status_code == 404
+        roster = client.get("/api/team", headers=owner).json()
+        member = next(m for m in roster["members"] if m["email"] == email)
+        assert client.post("/api/team/members/" + member["id"] + "/deactivate",
+                           headers=owner).status_code == 200
+        assert client.get("/api/me", headers=editor).status_code == 401
+
+
+def test_atomic_csv_import_and_free_quota(monkeypatch):
+    from app.config import settings
+    from app.rate_limit import reset_for_tests
+
+    reset_for_tests()
+    headers = "description,supplier,activity_date,factor_id,quantity,unit,scope,evidence_reference\n"
+    valid = headers + (
+        "January power,Utility,2026-01-20,electricity,100,kWh,Scope 2,invoice-Jan\n"
+        "February power,Utility,2026-02-20,electricity,120,kWh,Scope 2,invoice-Feb\n"
+    )
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        wrong = valid.replace("120,kWh", "120,GBP")
+        response = client.post("/api/activities/import-csv", headers=owner,
+                               files={"file": ("entries.csv", wrong.encode(), "text/csv")})
+        assert response.status_code == 422
+        assert client.get("/api/activities", headers=owner).json() == []
+        good = client.post("/api/activities/import-csv", headers=owner,
+                           files={"file": ("entries.csv", valid.encode(), "text/csv")})
+        assert good.status_code == 201, good.text
+        assert good.json()["created"] == 2
+        assert all(row["status"] == "draft"
+                   for row in client.get("/api/activities", headers=owner).json())
+        monkeypatch.setattr(settings, "free_activity_limit", 2)
+        assert client.post("/api/activities", headers=owner, json=activity()).status_code == 402
+        row = client.get("/api/activities", headers=owner).json()[0]
+        assert client.patch("/api/activities/" + row["id"] + "/approve",
+                            headers=owner).status_code == 200
+        assert client.get("/api/reports/summary?year=2026",
+                          headers=owner).json()["approved_activity_count"] == 1
+        assert client.get("/api/reports/summary?year=2025",
+                          headers=owner).json()["approved_activity_count"] == 0
