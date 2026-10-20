@@ -18,12 +18,17 @@ export default function Home() {
   // Access tokens deliberately remain in memory only; there is no localStorage persistence.
   const [token, setToken] = useState("");
   const [registerMode, setRegisterMode] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetSecret, setResetSecret] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [accountNewPassword, setAccountNewPassword] = useState("");
   const [identity, setIdentity] = useState({ organisation: "", email: "", password: "" });
   const [user, setUser] = useState<UserInfo | null>(null);
   const [catalog, setCatalog] = useState<FactorCatalog | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [section, setSection] = useState<"overview" | "activities" | "documents">("overview");
+  const [section, setSection] = useState<"overview" | "activities" | "documents" | "account">("overview");
   const [form, setForm] = useState<ActivityForm>(blank());
   const [editingId, setEditingId] = useState("");
   const [doc, setDoc] = useState<File | null>(null);
@@ -31,6 +36,78 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const verify = fragment.get("verify");
+    const reset = fragment.get("reset");
+    if (verify || reset) {
+      // Remove recovery secrets from browser history immediately.
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    if (reset) {
+      void Promise.resolve().then(() => {
+        setResetSecret(reset); setForgotMode(false); setRegisterMode(false);
+      });
+    }
+    if (verify) {
+      api<{ detail: string }>("/api/auth/verify-email", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: verify })
+      }).then((result) => { setNotice(result.detail); setForgotMode(false); })
+        .catch((err) => setError(err instanceof Error ? err.message : "Verification failed"));
+    }
+  }, []);
+
+  async function submitForgot(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/request-password-reset", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identity.email })
+      });
+      setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not request reset"); }
+    finally { setBusy(false); }
+  }
+
+  async function submitReset(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/reset-password", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetSecret, new_password: newPassword })
+      });
+      setResetSecret(""); setNewPassword(""); setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not reset password"); }
+    finally { setBusy(false); }
+  }
+
+  async function requestVerificationAgain() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/resend-verification", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identity.email })
+      });
+      setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not send verification"); }
+    finally { setBusy(false); }
+  }
+
+  async function submitChangePassword(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/change-password", token, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: currentPassword, new_password: accountNewPassword })
+      });
+      setCurrentPassword(""); setAccountNewPassword("");
+      setToken(""); setUser(null); setCatalog(null); setSummary(null); setActivities([]);
+      setSection("overview"); setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not update password"); }
+    finally { setBusy(false); }
+  }
 
   async function refresh(auth: string) {
     const [me, factors, rows, report] = await Promise.all([
@@ -44,13 +121,15 @@ export default function Home() {
 
   useEffect(() => {
     if (!token) return;
-    refresh(token).catch((err) => {
-      setError(err.message);
-      if (/auth|401/i.test(err.message)) setToken("");
+    void Promise.resolve().then(() => refresh(token)).catch((err) => {
+      setError(err instanceof Error ? err.message : "Could not load workspace");
+      if (/auth|401/i.test(String(err))) setToken("");
     });
   }, [token]);
 
-  function logout() {
+  async function logout() {
+    try { await api<{ detail: string }>("/api/auth/logout", token, { method: "POST" }); }
+    catch { /* Expired or unreachable sessions are cleared locally regardless. */ }
     setToken(""); setUser(null); setCatalog(null); setSummary(null); setActivities([]);
     setHints(null); setIdentity({ organisation: "", email: "", password: "" });
     setError(""); setNotice("");
@@ -60,12 +139,13 @@ export default function Home() {
     event.preventDefault(); setBusy(true); setError("");
     const path = registerMode ? "/api/auth/register" : "/api/auth/login";
     try {
-      const response = await api<{ access_token: string }>(path, "", {
+      const response = await api<{ access_token?: string; detail?: string }>(path, "", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registerMode ? identity : { email: identity.email, password: identity.password })
       });
       setIdentity((prev) => ({ ...prev, password: "" }));
-      setToken(response.access_token);
+      if (response.access_token) setToken(response.access_token);
+      else { setRegisterMode(false); setNotice(response.detail || "Check your email."); }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in");
     } finally { setBusy(false); }
@@ -138,16 +218,20 @@ export default function Home() {
           <p>An activity-based carbon workspace for growing organisations. Review every number, keep evidence, and export transparent draft inventories.</p>
           <div className="trust-line">Activity first · Source-linked factors · Human-reviewed data</div>
         </div>
-        <form className="auth-card" onSubmit={submitAuth}>
+        <form className="auth-card" onSubmit={resetSecret ? submitReset : forgotMode ? submitForgot : submitAuth}>
           <span className="label-soft">WORKSPACE ACCESS</span>
-          <h2>{registerMode ? "Create a workspace" : "Welcome back"}</h2>
-          <p>{registerMode ? "Start an isolated company workspace." : "Sign in to manage your organisation’s carbon inventory."}</p>
-          {registerMode && <label>Organisation name<input required minLength={2} maxLength={150} value={identity.organisation} onChange={(e) => setIdentity({ ...identity, organisation: e.target.value })} placeholder="Example Ltd" /></label>}
-          <label>Work email<input required type="email" autoComplete="username" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="you@company.com" /></label>
-          <label>Password<input required type="password" minLength={registerMode ? 12 : undefined} autoComplete={registerMode ? "new-password" : "current-password"} value={identity.password} onChange={(e) => setIdentity({ ...identity, password: e.target.value })} placeholder={registerMode ? "12+ characters" : "Your password"} /></label>
+          <h2>{resetSecret ? "Choose a new password" : forgotMode ? "Recover your account" : registerMode ? "Create a workspace" : "Welcome back"}</h2>
+          <p>{resetSecret ? "Set a strong password. Existing sessions will be revoked." : forgotMode ? "Enter your work email to request a one-time reset link." : registerMode ? "Start an isolated company workspace." : "Sign in to manage your organisation’s carbon inventory."}</p>
+          {!forgotMode && !resetSecret && registerMode && <label>Organisation name<input required minLength={2} maxLength={150} value={identity.organisation} onChange={(e) => setIdentity({ ...identity, organisation: e.target.value })} placeholder="Example Ltd" /></label>}
+          {!resetSecret && <label>Work email<input required type="email" autoComplete="username" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="you@company.com" /></label>}
+          {!resetSecret && !forgotMode && <label>Password<input required type="password" minLength={registerMode ? 12 : undefined} autoComplete={registerMode ? "new-password" : "current-password"} value={identity.password} onChange={(e) => setIdentity({ ...identity, password: e.target.value })} placeholder={registerMode ? "12+ characters" : "Your password"} /></label>}
+          {resetSecret && <label>New password<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 12 characters" /></label>}
+          {notice && <p className="alert success" role="status">{notice}</p>}
           {error && <p className="error" role="alert">{error}</p>}
-          <button className="btn primary full" disabled={busy}>{busy ? "Working…" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
-          <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>
+          {error.includes("Email verification required") && <button className="text-button" type="button" disabled={busy} onClick={requestVerificationAgain}>Resend verification email</button>}
+          <button className="btn primary full" disabled={busy}>{busy ? "Working…" : resetSecret ? "Update password" : forgotMode ? "Send reset link" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
+          {!resetSecret && <button className="text-button" type="button" onClick={() => { setRegisterMode(false); setForgotMode(!forgotMode); setError(""); setNotice(""); }}>{forgotMode ? "Back to sign in" : "Forgot your password?"}</button>}
+          {!resetSecret && !forgotMode && <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>}
           <div className="tiny-note">Early access pilot. No regulatory certification implied. Sessions expire; password recovery is not yet available.</div>
         </form>
       </div>
@@ -162,6 +246,7 @@ export default function Home() {
         <button className={section === "overview" ? "nav active" : "nav"} onClick={() => setSection("overview")}><span>◫</span> Overview</button>
         <button className={section === "activities" ? "nav active" : "nav"} onClick={() => setSection("activities")}><span>▤</span> Activity ledger <small>{drafts}</small></button>
         <button className={section === "documents" ? "nav active" : "nav"} onClick={() => setSection("documents")}><span>↥</span> Document review</button>
+        <button className={section === "account" ? "nav active" : "nav"} onClick={() => setSection("account")}><span>◉</span> Account security</button>
       </nav>
       <div className="side-bottom">
         <div className="side-note">EVIDENCE-LED REPORTING<p>Estimates are not certified or assured. Verify your reporting boundaries and factor sources.</p></div>
@@ -208,6 +293,18 @@ export default function Home() {
           <div className="page-heading"><div><div className="eyebrow accent">DOCUMENT INTELLIGENCE</div><h1>Document review<span className="dot">.</span></h1><p>Extract suggestions from invoices. Nothing is saved automatically.</p></div></div>
           <form className="surface upload-area" onSubmit={processDocument}><div className="upload-icon">↥</div><h2>Upload an invoice</h2><p>PDF, PNG or JPG · Maximum 8MB · PDFs maximum 5 pages</p><label className="file-picker">{doc ? doc.name : "Choose a document"}<input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => { setDoc(e.target.files?.[0] || null); setHints(null); }} /></label><button disabled={busy || !doc} className="btn primary">{busy ? "Reading…" : "Extract data suggestions →"}</button><small>OCR may require server-side Tesseract and Poppler. Failed extraction never returns fake sample data.</small></form>
           {hints && <div className="surface extract-result"><div className="label-soft">EXTRACTION RESULTS · REVIEW REQUIRED</div><h2>Document evidence hints</h2><p>{hints.warning}</p><div className="hint-meta"><div>Supplier <b>{hints.extracted.supplier || "Unknown"}</b></div><div>Invoice total <b>{hints.extracted.amount_gbp === null ? "Not found" : "£" + number(hints.extracted.amount_gbp)}</b></div><div>Date <b>{hints.extracted.date || "Unknown"}</b></div></div><h3>Physical quantities found</h3>{hints.extracted.activity_hints.length === 0 ? <p>No measured quantities found. Record the verified quantities manually.</p> : hints.extracted.activity_hints.map((hint, index) => <div className="hint-row" key={index}><span>{number(hint.quantity)} {hint.unit} <small>Source text: {hint.evidence}</small></span><button className="btn outline" onClick={() => applyDocumentHint(hint)}>Review as activity →</button></div>)}<details><summary>View OCR text preview</summary><pre>{hints.text_preview}</pre></details></div>}
+        </>}
+        {section === "account" && <>
+          <div className="page-heading"><div><div className="eyebrow accent">ACCOUNT & ACCESS</div><h1>Account security<span className="dot">.</span></h1><p>Change your password and invalidate every existing login session.</p></div></div>
+          <div className="surface" style={{ maxWidth: 620 }}>
+            <h2 style={{ fontSize: 21, marginBottom: 12 }}>Update password</h2>
+            <p style={{ fontSize: 13, color: "#71867b", lineHeight: 1.6, marginBottom: 24 }}>After saving, all access tokens will be revoked and you will need to sign in again. Use at least 12 characters.</p>
+            <form className="activity-form" style={{ padding: 0 }} onSubmit={submitChangePassword}>
+              <label>Current password<input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+              <label>New password<input type="password" autoComplete="new-password" required minLength={12} value={accountNewPassword} onChange={e => setAccountNewPassword(e.target.value)} /></label>
+              <button className="btn primary" disabled={busy}>{busy ? "Updating…" : "Change password →"}</button>
+            </form>
+          </div>
         </>}
         <footer><span>RegTech Carbon Workspace · Pilot version 0.2</span><span>Draft estimates only — not regulatory assurance</span></footer>
       </div>

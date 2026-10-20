@@ -43,7 +43,7 @@ def verify_password(password: str, encoded: str) -> bool:
 def access_token(user: User) -> str:
     expiry = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     return jwt.encode(
-        {"sub": user.id, "org": user.org_id, "exp": expiry, "type": "access"},
+        {"sub": user.id, "org": user.org_id, "ver": user.session_version, "exp": expiry, "type": "access"},
         settings.secret_key, algorithm=ALGORITHM
     )
 
@@ -65,6 +65,8 @@ async def current_user(
     except InvalidTokenError:
         raise unauthenticated
     user = await db.scalar(select(User).where(User.id == payload["sub"]))
-    if user is None or user.org_id != payload.get("org"):
+    if user is None or user.org_id != payload.get("org") or user.session_version != payload.get("ver"):
+        raise unauthenticated
+    if settings.require_email_verification and user.verified_at is None:
         raise unauthenticated
     return user

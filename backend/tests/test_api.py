@@ -92,3 +92,120 @@ def test_activity_date_must_match_factor_year():
         response = client.post("/api/activities", headers=auth, json=invalid)
         assert response.status_code == 422
         assert "factor vintage" in response.json()["detail"]
+
+
+
+def test_logout_revokes_access_token_and_password_change():
+    with TestClient(app) as client:
+        account = identity()
+        auth = register(client, account)
+        assert client.get("/api/me", headers=auth).status_code == 200
+        assert client.post("/api/auth/logout", headers=auth).status_code == 200
+        assert client.get("/api/me", headers=auth).status_code == 401
+        new = client.post("/api/auth/login", json={
+            "email": account["email"], "password": account["password"]
+        })
+        assert new.status_code == 200
+        current = {"Authorization": "Bearer " + new.json()["access_token"]}
+        result = client.post("/api/auth/change-password", headers=current, json={
+            "current_password": account["password"], "new_password": "ReplacedStrongPassword#2026"
+        })
+        assert result.status_code == 200, result.text
+        assert client.get("/api/me", headers=current).status_code == 401
+        assert client.post("/api/auth/login", json={
+            "email": account["email"], "password": account["password"]
+        }).status_code == 401
+        assert client.post("/api/auth/login", json={
+            "email": account["email"], "password": "ReplacedStrongPassword#2026"
+        }).status_code == 200
+
+
+def test_password_reset_one_time_and_no_account_enumeration(monkeypatch):
+    from app import account_actions
+    captured = []
+
+    async def fake_mail(recipient, purpose, secret):
+        captured.append((recipient, purpose, secret))
+
+    monkeypatch.setattr(account_actions, "deliver_email", fake_mail)
+    with TestClient(app) as client:
+        account = identity()
+        auth = register(client, account)
+        missing = client.post(
+            "/api/auth/request-password-reset",
+            json={"email": "missing-account@example.com"}
+        )
+        found = client.post(
+            "/api/auth/request-password-reset",
+            json={"email": account["email"]}
+        )
+        assert found.status_code == missing.status_code == 202
+        assert found.json() == missing.json()
+        assert len(captured) == 1
+        assert captured[0][1] == "reset_password"
+        token = captured[0][2]
+        assert client.post("/api/auth/reset-password", json={
+            "token": token, "new_password": "A_New_Strong_Password_2026!"
+        }).status_code == 200
+        assert client.get("/api/me", headers=auth).status_code == 401
+        assert client.post("/api/auth/reset-password", json={
+            "token": token, "new_password": "Another_Strong_Password_2026!"
+        }).status_code == 400
+        assert client.post("/api/auth/login", json={
+            "email": account["email"], "password": "A_New_Strong_Password_2026!"
+        }).status_code == 200
+
+
+def test_verification_token_is_single_use(monkeypatch):
+    from app import account_actions
+    captured = []
+
+    async def fake_mail(recipient, purpose, secret):
+        captured.append(secret)
+
+    monkeypatch.setattr(account_actions, "deliver_email", fake_mail)
+    with TestClient(app) as client:
+        account = identity()
+        auth = register(client, account)
+        response = client.post(
+            "/api/auth/resend-verification", json={"email": account["email"]}
+        )
+        assert response.status_code == 202
+        assert len(captured) == 1
+        token = captured[0]
+        assert client.post("/api/auth/verify-email", json={"token": token}).status_code == 200
+        assert client.post("/api/auth/verify-email", json={"token": token}).status_code == 400
+        # Verification revokes tokens issued before the verification event.
+        assert client.get("/api/me", headers=auth).status_code == 401
+
+
+def test_login_throttling():
+    from app.rate_limit import reset_for_tests, throttle
+    from fastapi import HTTPException
+    from types import SimpleNamespace
+    reset_for_tests()
+    request = SimpleNamespace(client=SimpleNamespace(host="isolated-test-peer"))
+    for _ in range(15):
+        throttle(request, "login")
+    try:
+        throttle(request, "login")
+    except HTTPException as error:
+        assert error.status_code == 429
+        assert "Retry-After" in error.headers
+    else:
+        raise AssertionError("Exceeded login rate limit without a 429")
+
+
+def test_login_lockout_after_repeated_failures():
+    from app.rate_limit import reset_for_tests
+    reset_for_tests()
+    with TestClient(app) as client:
+        account = identity()
+        register(client, account)
+        for _ in range(5):
+            assert client.post("/api/auth/login", json={
+                "email": account["email"], "password": "Incorrect-Password"
+            }).status_code == 401
+        assert client.post("/api/auth/login", json={
+            "email": account["email"], "password": account["password"]
+        }).status_code == 401

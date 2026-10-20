@@ -2,11 +2,11 @@
 import csv
 import io
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import Activity, AuditEvent, Organisation, User, get_db, init_db
 from app.security import access_token, current_user, hash_password, verify_password
+from app.account_actions import router as account_router, create_one_time_token, deliver_email, utc_now, aware
+from app.rate_limit import throttle
 from app.carbon_engine import carbon_engine, CarbonInput
 from app.nlp_pipeline import extract_hints
 from app.ocr_service import extract_text
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
+app.include_router(account_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[x.strip() for x in settings.cors_origins.split(",") if x.strip()],
@@ -123,30 +126,67 @@ def health():
     return {"status": "ok"}
 
 
+# Password hashes are intentionally expensive. Store a dummy hash so unknown users
+# take broadly similar time to bad-password users, without exposing account presence.
+DUMMY_HASH = hash_password("ThisAccountDoesNotExist-TemporaryDummy#2026")
+
+
 @app.post("/api/auth/register", status_code=201)
-async def register(payload: Register, db: AsyncSession = Depends(get_db)):
+async def register(
+    payload: Register, request: Request, db: AsyncSession = Depends(get_db)
+):
+    throttle(request, "register")
     email = str(payload.email).strip().lower()
     if await db.scalar(select(User.id).where(User.email == email)):
         raise HTTPException(409, "Email already registered")
     organisation = Organisation(name=payload.organisation.strip())
     db.add(organisation)
     await db.flush()
-    user = User(org_id=organisation.id, email=email,
-                password_hash=hash_password(payload.password), role="owner")
+    user = User(
+        org_id=organisation.id, email=email,
+        password_hash=hash_password(payload.password), role="owner"
+    )
     db.add(user)
+    await db.flush()
+    confirmation = None
+    if settings.require_email_verification:
+        confirmation = create_one_time_token(db, user, "verify_email")
     try:
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
         raise HTTPException(409, "Email already registered") from error
+    if confirmation:
+        await deliver_email(user.email, "verify_email", confirmation)
+        return {"detail": "Check your email to verify your account before signing in."}
+    # Development-only behaviour; production forbids skipping verification.
     return {"access_token": access_token(user), "token_type": "bearer"}
 
 
 @app.post("/api/auth/login")
-async def login(payload: Login, db: AsyncSession = Depends(get_db)):
+async def login(
+    payload: Login, request: Request, db: AsyncSession = Depends(get_db)
+):
+    throttle(request, "login")
     user = await db.scalar(select(User).where(User.email == str(payload.email).lower()))
-    if not user or not verify_password(payload.password, user.password_hash):
+    if not user:
+        verify_password(payload.password, DUMMY_HASH)
         raise HTTPException(401, "Invalid credentials")
+    now = utc_now()
+    if user.locked_until and aware(user.locked_until) > now:
+        raise HTTPException(401, "Invalid credentials")
+    if not verify_password(payload.password, user.password_hash):
+        user.failed_attempts += 1
+        if user.failed_attempts >= 5:
+            user.locked_until = now + timedelta(minutes=15)
+            user.failed_attempts = 0
+        await db.commit()
+        raise HTTPException(401, "Invalid credentials")
+    if settings.require_email_verification and user.verified_at is None:
+        raise HTTPException(403, "Email verification required")
+    user.failed_attempts = 0
+    user.locked_until = None
+    await db.commit()
     return {"access_token": access_token(user), "token_type": "bearer"}
 
 
@@ -162,7 +202,8 @@ def factors(user: User = Depends(current_user)):
 
 
 @app.post("/api/invoices/extract")
-async def invoice_hints(file: UploadFile = File(...), user: User = Depends(current_user)):
+async def invoice_hints(request: Request, file: UploadFile = File(...), user: User = Depends(current_user)):
+    throttle(request, "invoice")
     contents = await file.read(settings.max_upload_size + 1)
     if len(contents) > settings.max_upload_size:
         raise HTTPException(413, "Maximum upload is 8 MB")
