@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
@@ -129,6 +129,11 @@ async def reset_password(payload: ResetPassword, db: AsyncSession = Depends(get_
     user, record = await redeem(db, payload.token, "reset_password")
     user.password_hash = hash_password(payload.new_password)
     user.session_version += 1
+    await db.execute(
+        update(AccountToken).where(
+            AccountToken.user_id == user.id, AccountToken.consumed_at.is_(None)
+        ).values(consumed_at=utc_now())
+    )
     user.failed_attempts = 0
     user.locked_until = None
     await db.commit()
@@ -138,8 +143,16 @@ async def reset_password(payload: ResetPassword, db: AsyncSession = Depends(get_
 @router.post("/verify-email")
 async def verify_email(payload: VerifyEmail, db: AsyncSession = Depends(get_db)):
     user, record = await redeem(db, payload.token, "verify_email")
+    if user.verified_at is not None:
+        raise HTTPException(400, "Invalid or expired link")
     user.verified_at = utc_now()
     user.session_version += 1
+    await db.execute(
+        update(AccountToken).where(
+            AccountToken.user_id == user.id, AccountToken.purpose == "verify_email",
+            AccountToken.consumed_at.is_(None)
+        ).values(consumed_at=utc_now())
+    )
     await db.commit()
     return {"detail": "Email verified. You can sign in."}
 
@@ -166,6 +179,11 @@ async def change_password(
         raise HTTPException(400, "Current password is incorrect")
     user.password_hash = hash_password(payload.new_password)
     user.session_version += 1
+    await db.execute(
+        update(AccountToken).where(
+            AccountToken.user_id == user.id, AccountToken.consumed_at.is_(None)
+        ).values(consumed_at=utc_now())
+    )
     user.failed_attempts = 0
     user.locked_until = None
     await db.commit()
