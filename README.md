@@ -4,6 +4,31 @@
 
 A Next.js + FastAPI workspace for organisations to record measured emissions activities with evidence, review entries and export *draft* inventory reports. This is **not certified**, audit-ready, guaranteed UK SRS-compliant, or a replacement for professional advice.
 
+## End-to-end product workflow (v0.4 branch)
+
+**Owner signup → isolated workspace → measured activity entry or strict CSV import
+→ optional invoice OCR hints → team invite → independent reviewer approval
+→ annual draft carbon inventory → Stripe subscription state** is now implemented
+as a functional *local-development pilot*.
+
+- Free workspaces allow **25 non-voided activities and 3 team seats**; limits
+  are enforced by the API. The Pro plan only activates after a verified Stripe
+  subscription webhook; browser success redirects do not grant access.
+- Owner, editor, reviewer and viewer roles control who enters, reviews and
+  reads carbon activities. Invitation emails use one-time seven-day links.
+- CSV imports validate every row and reject the entire batch if any is invalid.
+  All imported records remain **drafts** until manually reviewed.
+- Annual report endpoints now accept `?year=2026` on summary, CSV and HTML.
+- A localhost-only frontend/API/PostgreSQL Docker Compose stack is available;
+  read [End-to-end operator runbook](docs/END_TO_END_RUNBOOK.md) before use.
+- Account emails require SMTP; subscription checkout requires securely supplied
+  Stripe account keys, a reviewed Price ID and webhook secret. **No live
+  payments, email deliveries or public deployment are currently configured.**
+
+**Do not accept confidential production customer invoices:** real-world invoice
+OCR accuracy, file isolation/virus scanning, GDPR controls, auditing and
+reporting methodology require professional verification.
+
 ## What has changed
 
 - Organisation-scoped accounts, strong password hashing, short-lived JWTs and explicit production configuration
@@ -80,7 +105,7 @@ socket-IP throttling, password change, and logout that **invalidates all active 
 tokens for that account**. The server does not return reset secrets in API responses.
 
 For an empty development database, \`Base.metadata.create_all()\` is still convenient.
-For a **new production database**, migrations are mandatory:
+For a **new production database**, migrations are mandatory (latest revision `20261021_02`):
 
 \`\`\`bash
 cd backend
@@ -139,3 +164,10 @@ All routes except health and auth are bearer-protected; tenant queries use `org_
 ## Product direction
 
 Initial customers: UK small businesses and accountants preparing evidence for voluntary carbon accounting, supplier questionnaires or early emissions baselines. Proposed paid features after validation: multi-user permissions, industry templates, Xero/Sage importers, meter data capture, assurance reviewer access, billing, configurable year-specific factors, supplier collaboration and verified export formats.
+
+### New API routes
+- `GET /api/team`, `POST /api/team/invitations`, `POST /api/team/accept`
+- `POST /api/team/invitations/{id}/revoke`, `POST /api/team/members/{id}/deactivate`
+- `POST /api/activities/import-csv` (strict UTF-8 activity template, 100 rows max)
+- `GET /api/billing/status`, `POST /api/billing/checkout`,
+  `POST /api/billing/portal`, `POST /api/billing/webhook`
