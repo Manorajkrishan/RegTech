@@ -21,6 +21,7 @@ jobs:
         run: |
           DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic upgrade head
           DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic current
+          DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic check
       - run: python -m pytest -q
   frontend:
     runs-on: ubuntu-latest
