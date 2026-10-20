@@ -19,11 +19,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Resolve audited, pinned framework dependencies and lock file
+      - name: Resolve patched dependencies and lock file (GHSA-68fv-2mgg-jv7q)
         run: |
           cd frontend
           npm install --no-fund --no-audit
           node -e "const p=require('./package-lock.json');if(!p.packages['node_modules/next'].version.startsWith('16.4.1'))process.exit(1)"
+          npm audit --omit=dev --audit-level=high
       - name: Commit regenerated package lock
         run: |
           git config user.name "github-actions[bot]"
