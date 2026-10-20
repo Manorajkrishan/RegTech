@@ -1,0 +1,48 @@
+name: regtech-private-pilot
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: regtech
+      POSTGRES_DB: regtech
+      POSTGRES_PASSWORD: ${REGTECH_DB_PASSWORD:?Generate a random password}
+    volumes:
+      - regtech_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regtech -d regtech"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      ENVIRONMENT: development
+      SECRET_KEY: ${REGTECH_SECRET_KEY:?Generate a random secret}
+      DB_URL: postgresql+asyncpg://regtech:${REGTECH_DB_PASSWORD}@db:5432/regtech
+      CORS_ORIGINS: http://127.0.0.1:3000
+      APP_PUBLIC_URL: http://127.0.0.1:3000
+      REQUIRE_EMAIL_VERIFICATION: "false"
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SENDER: ${SMTP_SENDER:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3000:3000"
+volumes:
+  regtech_postgres:

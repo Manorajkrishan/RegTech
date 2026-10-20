@@ -1,0 +1,14 @@
+.git
+**/.env
+.env
+**/node_modules
+**/.next
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/*.db
+**/*.sqlite3
+**/*.xlsx
+backend/data/synthetic_invoices.*
+backend/data/defra_2026_raw_catalogue.json
+**/uploads
