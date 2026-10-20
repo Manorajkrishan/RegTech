@@ -37,6 +37,17 @@ app = FastAPI(title=settings.app_name, version="0.4.0", lifespan=lifespan)
 app.include_router(account_router)
 app.include_router(team_router)
 app.include_router(billing_router)
+@app.middleware("http")
+async def secure_response_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[x.strip() for x in settings.cors_origins.split(",") if x.strip()],
@@ -223,7 +234,10 @@ async def invoice_hints(request: Request, file: UploadFile = File(...), user: Us
 
 
 async def enforce_activity_quota(db: AsyncSession, org_id: str, additional: int):
-    org = await db.get(Organisation, org_id)
+    # PostgreSQL row lock serializes quota checks across concurrent writes.
+    org = await db.scalar(select(Organisation).where(
+        Organisation.id == org_id
+    ).with_for_update())
     if org.subscription_status in ("active", "trialing"):
         return
     count = await db.scalar(select(func.count(Activity.id)).where(
