@@ -125,7 +125,8 @@ async def request_password_reset(
 
 
 @router.post("/reset-password")
-async def reset_password(payload: ResetPassword, db: AsyncSession = Depends(get_db)):
+async def reset_password(payload: ResetPassword, request: Request, db: AsyncSession = Depends(get_db)):
+    throttle(request, "redeem")
     user, record = await redeem(db, payload.token, "reset_password")
     user.password_hash = hash_password(payload.new_password)
     user.session_version += 1
@@ -141,7 +142,8 @@ async def reset_password(payload: ResetPassword, db: AsyncSession = Depends(get_
 
 
 @router.post("/verify-email")
-async def verify_email(payload: VerifyEmail, db: AsyncSession = Depends(get_db)):
+async def verify_email(payload: VerifyEmail, request: Request, db: AsyncSession = Depends(get_db)):
+    throttle(request, "redeem")
     user, record = await redeem(db, payload.token, "verify_email")
     if user.verified_at is not None:
         raise HTTPException(400, "Invalid or expired link")

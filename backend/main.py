@@ -202,7 +202,8 @@ def factors(user: User = Depends(current_user)):
 
 
 @app.post("/api/invoices/extract")
-async def invoice_hints(file: UploadFile = File(...), user: User = Depends(current_user)):
+async def invoice_hints(request: Request, file: UploadFile = File(...), user: User = Depends(current_user)):
+    throttle(request, "invoice")
     contents = await file.read(settings.max_upload_size + 1)
     if len(contents) > settings.max_upload_size:
         raise HTTPException(413, "Maximum upload is 8 MB")
