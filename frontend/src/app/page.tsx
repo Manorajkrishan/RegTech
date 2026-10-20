@@ -45,7 +45,11 @@ export default function Home() {
       // Remove recovery secrets from browser history immediately.
       window.history.replaceState(null, "", window.location.pathname);
     }
-    if (reset) { setResetSecret(reset); setForgotMode(false); setRegisterMode(false); }
+    if (reset) {
+      void Promise.resolve().then(() => {
+        setResetSecret(reset); setForgotMode(false); setRegisterMode(false);
+      });
+    }
     if (verify) {
       api<{ detail: string }>("/api/auth/verify-email", "", {
         method: "POST", headers: { "Content-Type": "application/json" },
