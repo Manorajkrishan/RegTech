@@ -63,7 +63,7 @@ def _send_smtp(recipient: str, subject: str, body: str) -> None:
 async def deliver_email(recipient: str, purpose: str, secret: str) -> None:
     if not settings.smtp_host or not settings.smtp_sender:
         raise HTTPException(503, "Account email delivery is not configured")
-    path = "/?verify=" if purpose == "verify_email" else "/?reset="
+    path = "/#verify=" if purpose == "verify_email" else "/#reset="
     link = settings.app_public_url.rstrip("/") + path + quote(secret)
     subject = "Verify your RegTech account" if purpose == "verify_email" else "Reset your RegTech password"
     expiration = "24 hours" if purpose == "verify_email" else "one hour"
