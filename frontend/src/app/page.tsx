@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { api, download, type Activity, type FactorCatalog, type InvoiceHints, type Summary } from "@/lib/api";
+import { TeamBilling, CsvImporter } from "@/components/WorkspaceOperations";
 
 type UserInfo = { email: string; role: string; organisation: string };
 type ActivityForm = {
@@ -20,6 +21,7 @@ export default function Home() {
   const [registerMode, setRegisterMode] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSecret, setResetSecret] = useState("");
+  const [inviteSecret, setInviteSecret] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [accountNewPassword, setAccountNewPassword] = useState("");
@@ -28,7 +30,7 @@ export default function Home() {
   const [catalog, setCatalog] = useState<FactorCatalog | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [section, setSection] = useState<"overview" | "activities" | "documents" | "account">("overview");
+  const [section, setSection] = useState<"overview" | "activities" | "documents" | "account" | "team" | "billing">("overview");
   const [form, setForm] = useState<ActivityForm>(blank());
   const [editingId, setEditingId] = useState("");
   const [doc, setDoc] = useState<File | null>(null);
@@ -41,10 +43,12 @@ export default function Home() {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
     const verify = fragment.get("verify");
     const reset = fragment.get("reset");
-    if (verify || reset) {
+    const invite = fragment.get("invite");
+    if (verify || reset || invite) {
       // Remove recovery secrets from browser history immediately.
       window.history.replaceState(null, "", window.location.pathname);
     }
+    if (invite) void Promise.resolve().then(() => { setInviteSecret(invite); setRegisterMode(false); setForgotMode(false); });
     if (reset) {
       void Promise.resolve().then(() => {
         setResetSecret(reset); setForgotMode(false); setRegisterMode(false);
@@ -58,6 +62,20 @@ export default function Home() {
         .catch((err) => setError(err instanceof Error ? err.message : "Verification failed"));
     }
   }, []);
+
+  async function submitInvite(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ access_token: string }>("/api/team/accept", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: inviteSecret, password: newPassword })
+      });
+      setInviteSecret(""); setNewPassword("");
+      setToken(result.access_token);
+      setNotice("You joined your company workspace.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not accept invitation"); }
+    finally { setBusy(false); }
+  }
 
   async function submitForgot(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setNotice("");
@@ -218,20 +236,20 @@ export default function Home() {
           <p>An activity-based carbon workspace for growing organisations. Review every number, keep evidence, and export transparent draft inventories.</p>
           <div className="trust-line">Activity first · Source-linked factors · Human-reviewed data</div>
         </div>
-        <form className="auth-card" onSubmit={resetSecret ? submitReset : forgotMode ? submitForgot : submitAuth}>
+        <form className="auth-card" onSubmit={inviteSecret ? submitInvite : resetSecret ? submitReset : forgotMode ? submitForgot : submitAuth}>
           <span className="label-soft">WORKSPACE ACCESS</span>
-          <h2>{resetSecret ? "Choose a new password" : forgotMode ? "Recover your account" : registerMode ? "Create a workspace" : "Welcome back"}</h2>
-          <p>{resetSecret ? "Set a strong password. Existing sessions will be revoked." : forgotMode ? "Enter your work email to request a one-time reset link." : registerMode ? "Start an isolated company workspace." : "Sign in to manage your organisation’s carbon inventory."}</p>
-          {!forgotMode && !resetSecret && registerMode && <label>Organisation name<input required minLength={2} maxLength={150} value={identity.organisation} onChange={(e) => setIdentity({ ...identity, organisation: e.target.value })} placeholder="Example Ltd" /></label>}
-          {!resetSecret && <label>Work email<input required type="email" autoComplete="username" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="you@company.com" /></label>}
-          {!resetSecret && !forgotMode && <label>Password<input required type="password" minLength={registerMode ? 12 : undefined} autoComplete={registerMode ? "new-password" : "current-password"} value={identity.password} onChange={(e) => setIdentity({ ...identity, password: e.target.value })} placeholder={registerMode ? "12+ characters" : "Your password"} /></label>}
-          {resetSecret && <label>New password<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 12 characters" /></label>}
+          <h2>{inviteSecret ? "Join your team" : resetSecret ? "Choose a new password" : forgotMode ? "Recover your account" : registerMode ? "Create a workspace" : "Welcome back"}</h2>
+          <p>{inviteSecret ? "This invitation confirms your team email. Create a password to join." : resetSecret ? "Set a strong password. Existing sessions will be revoked." : forgotMode ? "Enter your work email to request a one-time reset link." : registerMode ? "Start an isolated company workspace." : "Sign in to manage your organisation’s carbon inventory."}</p>
+          {!inviteSecret && !forgotMode && !resetSecret && registerMode && <label>Organisation name<input required minLength={2} maxLength={150} value={identity.organisation} onChange={(e) => setIdentity({ ...identity, organisation: e.target.value })} placeholder="Example Ltd" /></label>}
+          {!inviteSecret && !resetSecret && <label>Work email<input required type="email" autoComplete="username" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="you@company.com" /></label>}
+          {!inviteSecret && !resetSecret && !forgotMode && <label>Password<input required type="password" minLength={registerMode ? 12 : undefined} autoComplete={registerMode ? "new-password" : "current-password"} value={identity.password} onChange={(e) => setIdentity({ ...identity, password: e.target.value })} placeholder={registerMode ? "12+ characters" : "Your password"} /></label>}
+          {(resetSecret || inviteSecret) && <label>New password<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 12 characters" /></label>}
           {notice && <p className="alert success" role="status">{notice}</p>}
           {error && <p className="error" role="alert">{error}</p>}
           {error.includes("Email verification required") && <button className="text-button" type="button" disabled={busy} onClick={requestVerificationAgain}>Resend verification email</button>}
-          <button className="btn primary full" disabled={busy}>{busy ? "Working…" : resetSecret ? "Update password" : forgotMode ? "Send reset link" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
-          {!resetSecret && <button className="text-button" type="button" onClick={() => { setRegisterMode(false); setForgotMode(!forgotMode); setError(""); setNotice(""); }}>{forgotMode ? "Back to sign in" : "Forgot your password?"}</button>}
-          {!resetSecret && !forgotMode && <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>}
+          <button className="btn primary full" disabled={busy}>{busy ? "Working…" : inviteSecret ? "Join workspace" : resetSecret ? "Update password" : forgotMode ? "Send reset link" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
+          {!inviteSecret && !resetSecret && <button className="text-button" type="button" onClick={() => { setRegisterMode(false); setForgotMode(!forgotMode); setError(""); setNotice(""); }}>{forgotMode ? "Back to sign in" : "Forgot your password?"}</button>}
+          {!inviteSecret && !resetSecret && !forgotMode && <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>}
           <div className="tiny-note">Early access pilot. No regulatory certification implied. Sessions expire; password recovery is not yet available.</div>
         </form>
       </div>
@@ -247,6 +265,8 @@ export default function Home() {
         <button className={section === "activities" ? "nav active" : "nav"} onClick={() => setSection("activities")}><span>▤</span> Activity ledger <small>{drafts}</small></button>
         <button className={section === "documents" ? "nav active" : "nav"} onClick={() => setSection("documents")}><span>↥</span> Document review</button>
         <button className={section === "account" ? "nav active" : "nav"} onClick={() => setSection("account")}><span>◉</span> Account security</button>
+        <button className={section === "team" ? "nav active" : "nav"} onClick={() => setSection("team")}><span>♙</span> Team</button>
+        <button className={section === "billing" ? "nav active" : "nav"} onClick={() => setSection("billing")}><span>£</span> Billing</button>
       </nav>
       <div className="side-bottom">
         <div className="side-note">EVIDENCE-LED REPORTING<p>Estimates are not certified or assured. Verify your reporting boundaries and factor sources.</p></div>
@@ -286,6 +306,9 @@ export default function Home() {
             </div>
             <div className="form-bottom"><p>No price-to-kWh or price-to-litres estimates. The full data source must be reviewed.</p><div>{editingId && <button type="button" className="btn outline" onClick={() => { setForm(blank()); setEditingId(""); }}>Cancel edit</button>}<button disabled={busy} className="btn primary">{busy ? "Saving…" : editingId ? "Update draft →" : "Save as draft →"}</button></div></div>
           </form>
+          {(user?.role === "owner" || user?.role === "editor") && <CsvImporter token={token}
+            onImported={message => { setNotice(message); void refresh(token); }}
+            onError={setError} />}
           <div className="block-head"><div><h2>Recorded activities</h2><p>Approve a reviewed record to include it in reports</p></div><span className="mini-pill">{activities.length} RECORDS</span></div>
           <div className="surface ledger"><div className="table-scroll"><table><thead><tr><th>ACTIVITY</th><th>FACTOR</th><th>QUANTITY</th><th>EMISSIONS</th><th>STATUS / ACTION</th></tr></thead><tbody>{activities.map((activity) => <tr key={activity.id}><td><strong>{activity.description}</strong><small>{activity.evidence_reference}</small></td><td>{activity.factor_id}<small>{activity.scope} · {activity.factor_year}</small></td><td>{number(activity.quantity)} {activity.unit}</td><td><strong>{number(activity.emissions_kg_co2e)} kg</strong></td><td><span className={"status " + activity.status}>{activity.status}</span><div className="actions">{activity.status === "draft" && <><button disabled={busy} onClick={() => { setEditingId(activity.id); setForm({ description: activity.description, supplier: activity.supplier, activity_date: activity.activity_date, factor_id: activity.factor_id, quantity: String(activity.quantity), unit: activity.unit, scope: activity.scope, evidence_reference: activity.evidence_reference }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button><button disabled={busy} onClick={() => statusChange(activity.id, "approve")}>Approve</button></>}{activity.status !== "void" && <button disabled={busy} onClick={() => statusChange(activity.id, "void")}>Void</button>}</div></td></tr>)}</tbody></table>{activities.length === 0 && <div className="empty">No activity entries yet. Add an activity with supporting evidence above.</div>}</div></div>
         </>}
@@ -305,6 +328,13 @@ export default function Home() {
               <button className="btn primary" disabled={busy}>{busy ? "Updating…" : "Change password →"}</button>
             </form>
           </div>
+        </>}
+        {(section === "team" || section === "billing") && <>
+          <div className="page-heading"><div><div className="eyebrow accent">WORKSPACE MANAGEMENT</div>
+          <h1>{section === "team" ? "Your team" : "Billing"}<span className="dot">.</span></h1>
+          <p>{section === "team" ? "Invite colleagues and control access." : "Manage your plan and subscription."}</p></div></div>
+          <TeamBilling mode={section} token={token} role={user?.role || "viewer"}
+            onNotice={setNotice} onError={setError} />
         </>}
         <footer><span>RegTech Carbon Workspace · Pilot version 0.2</span><span>Draft estimates only — not regulatory assurance</span></footer>
       </div>

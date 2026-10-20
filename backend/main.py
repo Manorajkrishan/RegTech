@@ -9,13 +9,15 @@ from uuid import uuid4
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from pydantic import BaseModel, EmailStr, Field, ValidationError
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import Activity, AuditEvent, Organisation, User, get_db, init_db
+from app.team import router as team_router, can_write, can_review
+from app.billing import router as billing_router
 from app.security import access_token, current_user, hash_password, verify_password
 from app.account_actions import router as account_router, create_one_time_token, deliver_email, utc_now, aware
 from app.rate_limit import throttle
@@ -31,12 +33,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="0.4.0", lifespan=lifespan)
 app.include_router(account_router)
+app.include_router(team_router)
+app.include_router(billing_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[x.strip() for x in settings.cors_origins.split(",") if x.strip()],
-    allow_credentials=False, allow_methods=["GET", "POST", "PUT", "PATCH"],
+    allow_credentials=False, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -218,6 +222,65 @@ async def invoice_hints(request: Request, file: UploadFile = File(...), user: Us
     }
 
 
+async def enforce_activity_quota(db: AsyncSession, org_id: str, additional: int):
+    org = await db.get(Organisation, org_id)
+    if org.subscription_status in ("active", "trialing"):
+        return
+    count = await db.scalar(select(func.count(Activity.id)).where(
+        Activity.org_id == org_id, Activity.status != "void"
+    ))
+    if (count or 0) + additional > settings.free_activity_limit:
+        raise HTTPException(402, "Free activity limit reached. Upgrade in Billing.")
+
+
+@app.post("/api/activities/import-csv", status_code=201)
+async def import_csv(
+    file: UploadFile = File(...), user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Import verified activity measurements as DRAFTS, never auto-approved.
+
+    Atomic CSV processing: no partial import if any validation or quota check fails.
+    """
+    can_write(user)
+    raw = await file.read(512 * 1024 + 1)
+    if len(raw) > 512 * 1024 or not raw:
+        raise HTTPException(413, "CSV must be 1 byte to 512 KB")
+    try:
+        text = raw.decode("utf-8-sig")
+        stream = io.StringIO(text, newline="")
+        reader = csv.DictReader(stream, strict=True)
+        required = (
+            "description", "supplier", "activity_date", "factor_id",
+            "quantity", "unit", "scope", "evidence_reference"
+        )
+        if reader.fieldnames is None or sorted(reader.fieldnames) != sorted(required):
+            raise ValueError("CSV headers must exactly match the activity template")
+        records = list(reader)
+        if not 1 <= len(records) <= 100:
+            raise ValueError("CSV must contain 1–100 activities")
+    except (UnicodeError, csv.Error, ValueError) as exc:
+        raise HTTPException(422, "Invalid CSV: " + str(exc)) from exc
+    await enforce_activity_quota(db, user.org_id, len(records))
+    prepared = []
+    for index, item in enumerate(records, start=2):
+        try:
+            if None in item or any(value is None for value in item.values()):
+                raise ValueError("Unexpected column count")
+            validated = ActivityIn.model_validate(item)
+            row = Activity(org_id=user.org_id, created_by=user.id)
+            set_activity(row, validated)
+            prepared.append(row)
+        except (ValidationError, ValueError, HTTPException) as exc:
+            raise HTTPException(422, "Row " + str(index) + ": " + str(exc)) from exc
+    for row in prepared:
+        db.add(row)
+        await db.flush()
+        db.add(audit(user, row, "import_draft"))
+    await db.commit()
+    return {"created": len(prepared), "status": "draft"}
+
+
 @app.get("/api/activities")
 async def list_activities(
     user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
@@ -234,6 +297,8 @@ async def create_activity(
     payload: ActivityIn, user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    can_write(user)
+    await enforce_activity_quota(db, user.org_id, 1)
     row = Activity(org_id=user.org_id, created_by=user.id)
     set_activity(row, payload)
     db.add(row)
@@ -248,7 +313,10 @@ async def edit_activity(
     activity_id: str, payload: ActivityIn,
     user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ):
+    can_write(user)
     row = await get_activity(db, user, activity_id)
+    if user.role != "owner" and row.created_by != user.id:
+        raise HTTPException(403, "Editors may change only their own drafts")
     if row.status != "draft":
         raise HTTPException(409, "Only draft activities may be edited")
     set_activity(row, payload)
@@ -263,6 +331,7 @@ async def approve_activity(
     db: AsyncSession = Depends(get_db)
 ):
     row = await get_activity(db, user, activity_id)
+    can_review(user, row.created_by)
     if row.status != "draft":
         raise HTTPException(409, "Only drafts may be approved")
     row.status = "approved"
@@ -278,6 +347,9 @@ async def void_activity(
     db: AsyncSession = Depends(get_db)
 ):
     row = await get_activity(db, user, activity_id)
+    if user.role not in ("owner", "reviewer"):
+        if user.role != "editor" or row.created_by != user.id or row.status != "draft":
+            raise HTTPException(403, "Insufficient permission to void this record")
     if row.status == "void":
         raise HTTPException(409, "Already void")
     row.status = "void"
@@ -286,20 +358,25 @@ async def void_activity(
     return serialize_activity(row)
 
 
-async def report_for_org(db, user):
+async def report_for_org(db, user, year=None):
     org = await db.get(Organisation, user.org_id)
-    rows = await db.scalars(
-        select(Activity).where(Activity.org_id == user.org_id, Activity.status == "approved")
-        .order_by(Activity.created_at)
+    query = select(Activity).where(
+        Activity.org_id == user.org_id, Activity.status == "approved"
     )
+    if year is not None:
+        query = query.where(Activity.factor_year == year)
+    rows = await db.scalars(query.order_by(Activity.created_at))
     return build_report(rows.all(), org.name)
 
 
 @app.get("/api/reports/summary")
 async def summary(
+    year: int | None = None,
     user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ):
-    return await report_for_org(db, user)
+    if year is not None and (year < 2000 or year > 2100):
+        raise HTTPException(422, "Invalid reporting year")
+    return await report_for_org(db, user, year)
 
 
 @app.get("/api/reports/html", response_class=HTMLResponse)

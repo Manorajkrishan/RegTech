@@ -65,7 +65,7 @@ async def current_user(
     except InvalidTokenError:
         raise unauthenticated
     user = await db.scalar(select(User).where(User.id == payload["sub"]))
-    if user is None or user.org_id != payload.get("org") or user.session_version != payload.get("ver"):
+    if user is None or not user.is_active or user.org_id != payload.get("org") or user.session_version != payload.get("ver"):
         raise unauthenticated
     if settings.require_email_verification and user.verified_at is None:
         raise unauthenticated
