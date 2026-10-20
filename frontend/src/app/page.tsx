@@ -21,12 +21,14 @@ export default function Home() {
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSecret, setResetSecret] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [accountNewPassword, setAccountNewPassword] = useState("");
   const [identity, setIdentity] = useState({ organisation: "", email: "", password: "" });
   const [user, setUser] = useState<UserInfo | null>(null);
   const [catalog, setCatalog] = useState<FactorCatalog | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [section, setSection] = useState<"overview" | "activities" | "documents">("overview");
+  const [section, setSection] = useState<"overview" | "activities" | "documents" | "account">("overview");
   const [form, setForm] = useState<ActivityForm>(blank());
   const [editingId, setEditingId] = useState("");
   const [doc, setDoc] = useState<File | null>(null);
@@ -74,6 +76,32 @@ export default function Home() {
       });
       setResetSecret(""); setNewPassword(""); setNotice(result.detail);
     } catch (err) { setError(err instanceof Error ? err.message : "Could not reset password"); }
+    finally { setBusy(false); }
+  }
+
+  async function requestVerificationAgain() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/resend-verification", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identity.email })
+      });
+      setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not send verification"); }
+    finally { setBusy(false); }
+  }
+
+  async function submitChangePassword(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/change-password", token, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: currentPassword, new_password: accountNewPassword })
+      });
+      setCurrentPassword(""); setAccountNewPassword("");
+      setToken(""); setUser(null); setCatalog(null); setSummary(null); setActivities([]);
+      setSection("overview"); setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not update password"); }
     finally { setBusy(false); }
   }
 
@@ -196,6 +224,7 @@ export default function Home() {
           {resetSecret && <label>New password<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 12 characters" /></label>}
           {notice && <p className="alert success" role="status">{notice}</p>}
           {error && <p className="error" role="alert">{error}</p>}
+          {error.includes("Email verification required") && <button className="text-button" type="button" disabled={busy} onClick={requestVerificationAgain}>Resend verification email</button>}
           <button className="btn primary full" disabled={busy}>{busy ? "Working…" : resetSecret ? "Update password" : forgotMode ? "Send reset link" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
           {!resetSecret && <button className="text-button" type="button" onClick={() => { setRegisterMode(false); setForgotMode(!forgotMode); setError(""); setNotice(""); }}>{forgotMode ? "Back to sign in" : "Forgot your password?"}</button>}
           {!resetSecret && !forgotMode && <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>}
@@ -213,6 +242,7 @@ export default function Home() {
         <button className={section === "overview" ? "nav active" : "nav"} onClick={() => setSection("overview")}><span>◫</span> Overview</button>
         <button className={section === "activities" ? "nav active" : "nav"} onClick={() => setSection("activities")}><span>▤</span> Activity ledger <small>{drafts}</small></button>
         <button className={section === "documents" ? "nav active" : "nav"} onClick={() => setSection("documents")}><span>↥</span> Document review</button>
+        <button className={section === "account" ? "nav active" : "nav"} onClick={() => setSection("account")}><span>◉</span> Account security</button>
       </nav>
       <div className="side-bottom">
         <div className="side-note">EVIDENCE-LED REPORTING<p>Estimates are not certified or assured. Verify your reporting boundaries and factor sources.</p></div>
@@ -259,6 +289,18 @@ export default function Home() {
           <div className="page-heading"><div><div className="eyebrow accent">DOCUMENT INTELLIGENCE</div><h1>Document review<span className="dot">.</span></h1><p>Extract suggestions from invoices. Nothing is saved automatically.</p></div></div>
           <form className="surface upload-area" onSubmit={processDocument}><div className="upload-icon">↥</div><h2>Upload an invoice</h2><p>PDF, PNG or JPG · Maximum 8MB · PDFs maximum 5 pages</p><label className="file-picker">{doc ? doc.name : "Choose a document"}<input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => { setDoc(e.target.files?.[0] || null); setHints(null); }} /></label><button disabled={busy || !doc} className="btn primary">{busy ? "Reading…" : "Extract data suggestions →"}</button><small>OCR may require server-side Tesseract and Poppler. Failed extraction never returns fake sample data.</small></form>
           {hints && <div className="surface extract-result"><div className="label-soft">EXTRACTION RESULTS · REVIEW REQUIRED</div><h2>Document evidence hints</h2><p>{hints.warning}</p><div className="hint-meta"><div>Supplier <b>{hints.extracted.supplier || "Unknown"}</b></div><div>Invoice total <b>{hints.extracted.amount_gbp === null ? "Not found" : "£" + number(hints.extracted.amount_gbp)}</b></div><div>Date <b>{hints.extracted.date || "Unknown"}</b></div></div><h3>Physical quantities found</h3>{hints.extracted.activity_hints.length === 0 ? <p>No measured quantities found. Record the verified quantities manually.</p> : hints.extracted.activity_hints.map((hint, index) => <div className="hint-row" key={index}><span>{number(hint.quantity)} {hint.unit} <small>Source text: {hint.evidence}</small></span><button className="btn outline" onClick={() => applyDocumentHint(hint)}>Review as activity →</button></div>)}<details><summary>View OCR text preview</summary><pre>{hints.text_preview}</pre></details></div>}
+        </>}
+        {section === "account" && <>
+          <div className="page-heading"><div><div className="eyebrow accent">ACCOUNT & ACCESS</div><h1>Account security<span className="dot">.</span></h1><p>Change your password and invalidate every existing login session.</p></div></div>
+          <div className="surface" style={{ maxWidth: 620 }}>
+            <h2 style={{ fontSize: 21, marginBottom: 12 }}>Update password</h2>
+            <p style={{ fontSize: 13, color: "#71867b", lineHeight: 1.6, marginBottom: 24 }}>After saving, all access tokens will be revoked and you will need to sign in again. Use at least 12 characters.</p>
+            <form className="activity-form" style={{ padding: 0 }} onSubmit={submitChangePassword}>
+              <label>Current password<input type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+              <label>New password<input type="password" autoComplete="new-password" required minLength={12} value={accountNewPassword} onChange={e => setAccountNewPassword(e.target.value)} /></label>
+              <button className="btn primary" disabled={busy}>{busy ? "Updating…" : "Change password →"}</button>
+            </form>
+          </div>
         </>}
         <footer><span>RegTech Carbon Workspace · Pilot version 0.2</span><span>Draft estimates only — not regulatory assurance</span></footer>
       </div>
