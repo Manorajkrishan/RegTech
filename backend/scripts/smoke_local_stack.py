@@ -26,7 +26,7 @@ assert request("/healthz")[0] == 200
 assert request("/api/activities")[0] == 401
 account = {
     "organisation": "Local CI Carbon Example",
-    "email": "workflow-smoke@example.invalid",
+    "email": "workflow-smoke@example.com",
     "password": "VeryLongSyntheticPassword_2026!"
 }
 status, created = request("/api/auth/register", "POST", account)
