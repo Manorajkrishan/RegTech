@@ -23,6 +23,16 @@ jobs:
           DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic current
           DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic check
       - run: python -m pytest -q
+  local-staging-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate private Docker Compose configuration
+        env:
+          REGTECH_DB_PASSWORD: ci-only-placeholder-password
+          REGTECH_SECRET_KEY: ci-only-placeholder-key
+        run: docker compose -f docker-compose.yml config --quiet
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
