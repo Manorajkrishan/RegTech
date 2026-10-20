@@ -381,17 +381,23 @@ async def summary(
 
 @app.get("/api/reports/html", response_class=HTMLResponse)
 async def report_html(
+    year: int | None = None,
     user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ):
-    return HTMLResponse(render_html(await report_for_org(db, user)),
+    if year is not None and (year < 2000 or year > 2100):
+        raise HTTPException(422, "Invalid reporting year")
+    return HTMLResponse(render_html(await report_for_org(db, user, year)),
                         headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/reports/csv")
 async def report_csv(
+    year: int | None = None,
     user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ):
-    report = await report_for_org(db, user)
+    if year is not None and (year < 2000 or year > 2100):
+        raise HTTPException(422, "Invalid reporting year")
+    report = await report_for_org(db, user, year)
     output = io.StringIO()
     writer = csv.writer(output)
     columns = ("description", "factor_id", "factor_year", "factor_source",
