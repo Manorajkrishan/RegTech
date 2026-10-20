@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, download, type Activity, type FactorCatalog, type InvoiceHints, type Summary } from "@/lib/api";
 import { TeamBilling, CsvImporter } from "@/components/WorkspaceOperations";
 
-type UserInfo = { email: string; role: string; organisation: string };
+type UserInfo = { id: string; email: string; role: string; organisation: string };
 type ActivityForm = {
   description: string; supplier: string; activity_date: string; factor_id: string;
   quantity: string; unit: string; scope: string; evidence_reference: string;
@@ -132,7 +132,7 @@ export default function Home() {
       api<UserInfo>("/api/me", auth),
       api<FactorCatalog>("/api/factors", auth),
       api<Activity[]>("/api/activities", auth),
-      api<Summary>("/api/reports/summary", auth)
+      api<Summary>("/api/reports/summary?year=2026", auth)
     ]);
     setUser(me); setCatalog(factors); setActivities(rows); setSummary(report);
   }
@@ -280,7 +280,7 @@ export default function Home() {
         {notice && <div className="alert success">{notice}<button onClick={() => setNotice("")}>×</button></div>}
         {catalog?.warning && <div className="factor-warning"><strong>Data provenance notice</strong><span>{catalog.warning} <a target="_blank" rel="noreferrer" href={catalog.official_2026_url}>Official 2026 source ↗</a></span></div>}
         {section === "overview" && <>
-          <div className="page-heading"><div><div className="eyebrow accent">YOUR CARBON PICTURE</div><h1>Overview<span className="dot">.</span></h1><p>Reviewed activity data in one transparent place.</p></div><button className="btn primary" onClick={() => setSection("activities")}>+ New activity</button></div>
+          <div className="page-heading"><div><div className="eyebrow accent">YOUR CARBON PICTURE</div><h1>Overview<span className="dot">.</span></h1><p>Reviewed activity data in one transparent place.</p></div>{(user?.role === "owner" || user?.role === "editor") && <button className="btn primary" onClick={() => setSection("activities")}>+ New activity</button>}</div>
           <div className="stat-grid">
             <div className="stat-card main-stat"><span>TOTAL REPORTED ESTIMATE</span><strong>{number(summary?.total_tonnes_co2e || 0)} <small>tCO₂e</small></strong><div>Approved activity records only</div></div>
             <div className="stat-card"><span>REVIEWED RECORDS</span><strong>{summary?.approved_activity_count || 0}</strong><div>In the draft inventory</div></div>
@@ -288,11 +288,11 @@ export default function Home() {
           </div>
           <div className="block-head"><div><h2>Emissions by scope</h2><p>Only approved entries count toward the totals</p></div><div className="mini-pill">kg CO₂e</div></div>
           <div className="scope-grid">{["Scope 1", "Scope 2", "Scope 3"].map((scope, index) => <div className="scope-card" key={scope}><div className="scope-index">0{index + 1}</div><h3>{scope}</h3><strong>{number(summary?.scope_emissions[scope] || 0)}</strong><div className="meter"><span style={{ width: Math.max(0, Math.min(100, ((summary?.scope_emissions[scope] || 0) / Math.max(summary?.total_kg_co2e || 0, 1)) * 100)) + "%" }} /></div></div>)}</div>
-          <div className="surface summary-surface"><div><div className="label-soft">REPORTING OUTPUT</div><h2>Draft inventory exports</h2><p>Every row includes its factor vintage, physical activity and evidence reference. Not a UK SRS compliance certificate.</p></div><div className="button-stack"><button disabled={busy} className="btn dark" onClick={() => exportReport("/api/reports/html", "regtech-draft-inventory.html")}>↓ HTML report</button><button disabled={busy} className="btn outline" onClick={() => exportReport("/api/reports/csv", "regtech-activities.csv")}>↓ CSV export</button></div></div>
+          <div className="surface summary-surface"><div><div className="label-soft">REPORTING OUTPUT</div><h2>2026 draft inventory exports</h2><p>Every row includes its factor vintage, physical activity and evidence reference. Not a UK SRS compliance certificate.</p></div><div className="button-stack"><button disabled={busy} className="btn dark" onClick={() => exportReport("/api/reports/html?year=2026", "regtech-2026-draft-inventory.html")}>↓ HTML report</button><button disabled={busy} className="btn outline" onClick={() => exportReport("/api/reports/csv?year=2026", "regtech-2026-activities.csv")}>↓ CSV export</button></div></div>
         </>}
         {section === "activities" && <>
           <div className="page-heading"><div><div className="eyebrow accent">ACTIVITY ACCOUNTING</div><h1>Activity ledger<span className="dot">.</span></h1><p>Specify the physical quantity and matching factor. Review before approval.</p></div></div>
-          <form className="surface activity-form" onSubmit={submitActivity}>
+          {(user?.role === "owner" || user?.role === "editor") && <form className="surface activity-form" onSubmit={submitActivity}>
             <div className="panel-heading"><h2>{editingId ? "Edit draft activity" : "Record an activity"}</h2><span className="mini-pill">HUMAN REVIEW REQUIRED</span></div>
             <div className="field-grid">
               <label className="span-2">Activity description<input required minLength={3} value={form.description} placeholder="e.g. Electricity consumed in April" onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
@@ -305,12 +305,12 @@ export default function Home() {
               <label className="span-2">Evidence reference<input required minLength={3} value={form.evidence_reference} onChange={(e) => setForm({ ...form, evidence_reference: e.target.value })} placeholder="Invoice number / page / meter reading / source record" /></label>
             </div>
             <div className="form-bottom"><p>No price-to-kWh or price-to-litres estimates. The full data source must be reviewed.</p><div>{editingId && <button type="button" className="btn outline" onClick={() => { setForm(blank()); setEditingId(""); }}>Cancel edit</button>}<button disabled={busy} className="btn primary">{busy ? "Saving…" : editingId ? "Update draft →" : "Save as draft →"}</button></div></div>
-          </form>
+          </form>}
           {(user?.role === "owner" || user?.role === "editor") && <CsvImporter token={token}
             onImported={message => { setNotice(message); void refresh(token); }}
             onError={setError} />}
           <div className="block-head"><div><h2>Recorded activities</h2><p>Approve a reviewed record to include it in reports</p></div><span className="mini-pill">{activities.length} RECORDS</span></div>
-          <div className="surface ledger"><div className="table-scroll"><table><thead><tr><th>ACTIVITY</th><th>FACTOR</th><th>QUANTITY</th><th>EMISSIONS</th><th>STATUS / ACTION</th></tr></thead><tbody>{activities.map((activity) => <tr key={activity.id}><td><strong>{activity.description}</strong><small>{activity.evidence_reference}</small></td><td>{activity.factor_id}<small>{activity.scope} · {activity.factor_year}</small></td><td>{number(activity.quantity)} {activity.unit}</td><td><strong>{number(activity.emissions_kg_co2e)} kg</strong></td><td><span className={"status " + activity.status}>{activity.status}</span><div className="actions">{activity.status === "draft" && <><button disabled={busy} onClick={() => { setEditingId(activity.id); setForm({ description: activity.description, supplier: activity.supplier, activity_date: activity.activity_date, factor_id: activity.factor_id, quantity: String(activity.quantity), unit: activity.unit, scope: activity.scope, evidence_reference: activity.evidence_reference }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button><button disabled={busy} onClick={() => statusChange(activity.id, "approve")}>Approve</button></>}{activity.status !== "void" && <button disabled={busy} onClick={() => statusChange(activity.id, "void")}>Void</button>}</div></td></tr>)}</tbody></table>{activities.length === 0 && <div className="empty">No activity entries yet. Add an activity with supporting evidence above.</div>}</div></div>
+          <div className="surface ledger"><div className="table-scroll"><table><thead><tr><th>ACTIVITY</th><th>FACTOR</th><th>QUANTITY</th><th>EMISSIONS</th><th>STATUS / ACTION</th></tr></thead><tbody>{activities.map((activity) => <tr key={activity.id}><td><strong>{activity.description}</strong><small>{activity.evidence_reference}</small></td><td>{activity.factor_id}<small>{activity.scope} · {activity.factor_year}</small></td><td>{number(activity.quantity)} {activity.unit}</td><td><strong>{number(activity.emissions_kg_co2e)} kg</strong></td><td><span className={"status " + activity.status}>{activity.status}</span><div className="actions">{activity.status === "draft" && (user?.role === "owner" || (user?.role === "editor" && user?.id === activity.created_by)) && <><button disabled={busy} onClick={() => { setEditingId(activity.id); setForm({ description: activity.description, supplier: activity.supplier, activity_date: activity.activity_date, factor_id: activity.factor_id, quantity: String(activity.quantity), unit: activity.unit, scope: activity.scope, evidence_reference: activity.evidence_reference }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button></>}{activity.status === "draft" && (user?.role === "owner" || (user?.role === "reviewer" && user.id !== activity.created_by)) && <button disabled={busy} onClick={() => statusChange(activity.id, "approve")}>Approve</button>}{activity.status !== "void" && (user?.role === "owner" || user?.role === "reviewer" || (user?.role === "editor" && user.id === activity.created_by && activity.status === "draft")) && <button disabled={busy} onClick={() => statusChange(activity.id, "void")}>Void</button>}</div></td></tr>)}</tbody></table>{activities.length === 0 && <div className="empty">No activity entries yet. Add an activity with supporting evidence above.</div>}</div></div>
         </>}
         {section === "documents" && <>
           <div className="page-heading"><div><div className="eyebrow accent">DOCUMENT INTELLIGENCE</div><h1>Document review<span className="dot">.</span></h1><p>Extract suggestions from invoices. Nothing is saved automatically.</p></div></div>

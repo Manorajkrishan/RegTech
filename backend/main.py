@@ -69,7 +69,7 @@ class ActivityIn(BaseModel):
 
 def serialize_activity(row):
     return {
-        "id": row.id, "description": row.description, "supplier": row.supplier,
+        "id": row.id, "created_by": row.created_by, "description": row.description, "supplier": row.supplier,
         "activity_date": row.activity_date, "factor_id": row.factor_id,
         "factor_year": row.factor_year, "factor_value": row.factor_value,
         "factor_source": row.factor_source, "quantity": row.quantity, "unit": row.unit,
@@ -197,7 +197,7 @@ async def login(
 @app.get("/api/me")
 async def me(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     organisation = await db.get(Organisation, user.org_id)
-    return {"email": user.email, "role": user.role, "organisation": organisation.name}
+    return {"id": user.id, "email": user.email, "role": user.role, "organisation": organisation.name}
 
 
 @app.get("/api/factors")
