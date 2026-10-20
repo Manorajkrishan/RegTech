@@ -44,9 +44,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!token) return;
-    refresh(token).catch((err) => {
-      setError(err.message);
-      if (/auth|401/i.test(err.message)) setToken("");
+    // Defer data fetch to a microtask; state updates happen after the async load.
+    void Promise.resolve().then(() => refresh(token)).catch((err) => {
+      setError(err instanceof Error ? err.message : "Could not load workspace");
+      if (/auth|401/i.test(String(err))) setToken("");
     });
   }, [token]);
 
