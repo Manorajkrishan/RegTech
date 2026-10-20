@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     max_upload_size: int = 8 * 1024 * 1024
     factor_path: str = ""
     access_token_minutes: int = 60
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_sender: str = ""
+    app_public_url: str = "http://localhost:3000"
+    require_email_verification: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -24,6 +31,12 @@ class Settings(BaseSettings):
                 raise RuntimeError("Production requires a persistent PostgreSQL database")
             if "*" in self.cors_origins:
                 raise RuntimeError("Wildcard CORS is forbidden in production")
+            if not self.require_email_verification:
+                raise RuntimeError("Production requires email verification")
+            if not all((self.smtp_host, self.smtp_username, self.smtp_password, self.smtp_sender)):
+                raise RuntimeError("Production requires configured SMTP credentials")
+            if not self.app_public_url.startswith("https://"):
+                raise RuntimeError("Production requires an HTTPS APP_PUBLIC_URL")
 
 
 @lru_cache

@@ -34,6 +34,22 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(Text)
     role: Mapped[str] = mapped_column(String(20), default="owner")
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    session_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AccountToken(Base):
+    """Store only SHA-256 digests, never recovery/verification tokens themselves."""
+    __tablename__ = "account_tokens"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    purpose: Mapped[str] = mapped_column(String(20), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -75,8 +91,20 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def init_db():
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    if settings.environment == "production":
+        # Production schema changes are explicit and reviewed: never silently create tables.
+        async with engine.connect() as connection:
+            try:
+                revision = await connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                )
+                if revision.scalar_one_or_none() != "20261020_01":
+                    raise RuntimeError("Run 'alembic upgrade head' before starting production")
+            except Exception as exc:
+                raise RuntimeError("Production DB migration required: alembic upgrade head") from exc
+    else:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
 
 
 async def get_db():

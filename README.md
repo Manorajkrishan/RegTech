@@ -72,23 +72,62 @@ npm run build
 
 GitHub Actions also runs these checks on every PR. Passing checks is not an independent accuracy assessment or security penetration test.
 
+## Account security and database migrations (new)
+
+The new account security layer provides one-time email verification and password-reset
+tokens (SHA-256 digests at rest), account lockout after repeated failed logins, per-process
+socket-IP throttling, password change, and logout that **invalidates all active bearer
+tokens for that account**. The server does not return reset secrets in API responses.
+
+For an empty development database, \`Base.metadata.create_all()\` is still convenient.
+For a **new production database**, migrations are mandatory:
+
+\`\`\`bash
+cd backend
+pip install -r requirements.txt
+# First create an EMPTY managed PostgreSQL database, set DB_URL and a strong SECRET_KEY
+python -m alembic upgrade head
+python -m alembic current
+\`\`\`
+
+**Existing pilot databases** created by the old \`create_all\` code are NOT automatically
+migrated. Back up the data, use a migration rehearsal on a copy and reconcile the original
+schema with Alembic before cutover. Never use \`stamp head\` to paper over missing columns.
+The production API refuses to start when the expected migration revision is absent.
+
+For production set \`ENVIRONMENT=production\`, \`REQUIRE_EMAIL_VERIFICATION=true\`,
+\`APP_PUBLIC_URL=https://...\`, \`SMTP_HOST\`, \`SMTP_PORT\`,
+\`SMTP_USERNAME\`, \`SMTP_PASSWORD\`, \`SMTP_SENDER\` and all DB/CORS secrets.
+Emails require TLS or SMTP-over-TLS; URLs contain one-time tokens which must not
+be logged or forwarded to analytics. Test with a real email provider in *private*
+staging before connecting real users.
+
+**Defense in depth, not complete protection:** the built-in IP throttle is per
+process, so production MUST also use a shared/gateway rate limiter, request/abuse
+monitoring and trusted proxy configuration. Registration/login can be abused
+without WAF quotas, CAPTCHA or identity checks. Multi-user roles, session device
+management, privacy retention and audit logging for auth events remain future work.
+
 ## Production restrictions
 
 Do **not** publicly deploy this pilot with customer data before the following operational controls are in place:
 
 1. Set `ENVIRONMENT=production`, a strong `SECRET_KEY`, a restricted `CORS_ORIGINS`, a persistent managed Postgres `DB_URL` (using `postgresql+asyncpg://...`), HTTPS and a properly maintained secrets store.
-2. Add migrations (Alembic), backup/restore drills, uptime monitoring, email verification/recovery, access management, session revocation and operational incident procedures.
+2. **Alembic baseline, email verification, password recovery and session revocation now exist.** Still add backup/restore drills, uptime monitoring, operational incident procedures, user/role management and auth audit events.
 3. Apply gateway-level rate limiting, abuse/bot protection, request monitoring, data retention/deletion, security headers, vulnerability scanning and an external security review.
 4. Independently reconcile the current year's emission factors to official source rows and test real invoices. Validate scope/boundary rules with a qualified GHG accountant.
 5. Define privacy notices, UK GDPR controller/processor agreements, retention policy, lawful basis, processor locations and insurance requirements.
 6. Run end-to-end user acceptance tests, tenant-isolation tests, load tests, accessibility checks and a real SME pilot.
 7. Add billing/organisation invitations only after security and reporting accuracy are validated.
 
-**Important pilot limitations:** only a single owner account per organisation, self-service sign-up without verified email, no password reset, tokens in memory (sign-in needed after refresh), no subscriptions or integrations, no factor reconciliation workflow, no tax/legal compliance claims.
+**Important pilot limitations:** only a single owner account per organisation; production requires working SMTP for account verification/recovery; bearer tokens remain in browser memory (sign-in needed after refresh), no subscriptions or integrations, no full factor reconciliation workflow, no tax/legal compliance claims.
 
 ## Routes
 
 - `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/me`
+- `POST /api/auth/logout`, `POST /api/auth/change-password`
+- `POST /api/auth/request-password-reset`, `POST /api/auth/reset-password`
+- `POST /api/auth/verify-email`, `POST /api/auth/resend-verification`
 - `GET /api/factors`, `POST /api/invoices/extract` (preview only)
 - `GET|POST /api/activities`, `PUT /api/activities/{id}`
 - `PATCH /api/activities/{id}/approve`, `PATCH /api/activities/{id}/void`

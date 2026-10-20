@@ -17,6 +17,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      - name: Check initial database migration on a clean database
+        run: |
+          DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic upgrade head
+          DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic current
       - run: python -m pytest -q
   frontend:
     runs-on: ubuntu-latest

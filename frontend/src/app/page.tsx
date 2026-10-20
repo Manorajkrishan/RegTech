@@ -18,6 +18,9 @@ export default function Home() {
   // Access tokens deliberately remain in memory only; there is no localStorage persistence.
   const [token, setToken] = useState("");
   const [registerMode, setRegisterMode] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetSecret, setResetSecret] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [identity, setIdentity] = useState({ organisation: "", email: "", password: "" });
   const [user, setUser] = useState<UserInfo | null>(null);
   const [catalog, setCatalog] = useState<FactorCatalog | null>(null);
@@ -31,6 +34,48 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const verify = fragment.get("verify");
+    const reset = fragment.get("reset");
+    if (verify || reset) {
+      // Remove recovery secrets from browser history immediately.
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    if (reset) { setResetSecret(reset); setForgotMode(false); setRegisterMode(false); }
+    if (verify) {
+      api<{ detail: string }>("/api/auth/verify-email", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: verify })
+      }).then((result) => { setNotice(result.detail); setForgotMode(false); })
+        .catch((err) => setError(err instanceof Error ? err.message : "Verification failed"));
+    }
+  }, []);
+
+  async function submitForgot(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/request-password-reset", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identity.email })
+      });
+      setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not request reset"); }
+    finally { setBusy(false); }
+  }
+
+  async function submitReset(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ detail: string }>("/api/auth/reset-password", "", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetSecret, new_password: newPassword })
+      });
+      setResetSecret(""); setNewPassword(""); setNotice(result.detail);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not reset password"); }
+    finally { setBusy(false); }
+  }
 
   async function refresh(auth: string) {
     const [me, factors, rows, report] = await Promise.all([
@@ -50,7 +95,9 @@ export default function Home() {
     });
   }, [token]);
 
-  function logout() {
+  async function logout() {
+    try { await api<{ detail: string }>("/api/auth/logout", token, { method: "POST" }); }
+    catch { /* Expired or unreachable sessions are cleared locally regardless. */ }
     setToken(""); setUser(null); setCatalog(null); setSummary(null); setActivities([]);
     setHints(null); setIdentity({ organisation: "", email: "", password: "" });
     setError(""); setNotice("");
@@ -60,12 +107,13 @@ export default function Home() {
     event.preventDefault(); setBusy(true); setError("");
     const path = registerMode ? "/api/auth/register" : "/api/auth/login";
     try {
-      const response = await api<{ access_token: string }>(path, "", {
+      const response = await api<{ access_token?: string; detail?: string }>(path, "", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registerMode ? identity : { email: identity.email, password: identity.password })
       });
       setIdentity((prev) => ({ ...prev, password: "" }));
-      setToken(response.access_token);
+      if (response.access_token) setToken(response.access_token);
+      else { setRegisterMode(false); setNotice(response.detail || "Check your email."); }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in");
     } finally { setBusy(false); }
@@ -138,16 +186,19 @@ export default function Home() {
           <p>An activity-based carbon workspace for growing organisations. Review every number, keep evidence, and export transparent draft inventories.</p>
           <div className="trust-line">Activity first · Source-linked factors · Human-reviewed data</div>
         </div>
-        <form className="auth-card" onSubmit={submitAuth}>
+        <form className="auth-card" onSubmit={resetSecret ? submitReset : forgotMode ? submitForgot : submitAuth}>
           <span className="label-soft">WORKSPACE ACCESS</span>
-          <h2>{registerMode ? "Create a workspace" : "Welcome back"}</h2>
-          <p>{registerMode ? "Start an isolated company workspace." : "Sign in to manage your organisation’s carbon inventory."}</p>
-          {registerMode && <label>Organisation name<input required minLength={2} maxLength={150} value={identity.organisation} onChange={(e) => setIdentity({ ...identity, organisation: e.target.value })} placeholder="Example Ltd" /></label>}
-          <label>Work email<input required type="email" autoComplete="username" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="you@company.com" /></label>
-          <label>Password<input required type="password" minLength={registerMode ? 12 : undefined} autoComplete={registerMode ? "new-password" : "current-password"} value={identity.password} onChange={(e) => setIdentity({ ...identity, password: e.target.value })} placeholder={registerMode ? "12+ characters" : "Your password"} /></label>
+          <h2>{resetSecret ? "Choose a new password" : forgotMode ? "Recover your account" : registerMode ? "Create a workspace" : "Welcome back"}</h2>
+          <p>{resetSecret ? "Set a strong password. Existing sessions will be revoked." : forgotMode ? "Enter your work email to request a one-time reset link." : registerMode ? "Start an isolated company workspace." : "Sign in to manage your organisation’s carbon inventory."}</p>
+          {!forgotMode && !resetSecret && registerMode && <label>Organisation name<input required minLength={2} maxLength={150} value={identity.organisation} onChange={(e) => setIdentity({ ...identity, organisation: e.target.value })} placeholder="Example Ltd" /></label>}
+          {!resetSecret && <label>Work email<input required type="email" autoComplete="username" value={identity.email} onChange={(e) => setIdentity({ ...identity, email: e.target.value })} placeholder="you@company.com" /></label>}
+          {!resetSecret && !forgotMode && <label>Password<input required type="password" minLength={registerMode ? 12 : undefined} autoComplete={registerMode ? "new-password" : "current-password"} value={identity.password} onChange={(e) => setIdentity({ ...identity, password: e.target.value })} placeholder={registerMode ? "12+ characters" : "Your password"} /></label>}
+          {resetSecret && <label>New password<input required type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 12 characters" /></label>}
+          {notice && <p className="alert success" role="status">{notice}</p>}
           {error && <p className="error" role="alert">{error}</p>}
-          <button className="btn primary full" disabled={busy}>{busy ? "Working…" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
-          <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>
+          <button className="btn primary full" disabled={busy}>{busy ? "Working…" : resetSecret ? "Update password" : forgotMode ? "Send reset link" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
+          {!resetSecret && <button className="text-button" type="button" onClick={() => { setRegisterMode(false); setForgotMode(!forgotMode); setError(""); setNotice(""); }}>{forgotMode ? "Back to sign in" : "Forgot your password?"}</button>}
+          {!resetSecret && !forgotMode && <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>}
           <div className="tiny-note">Early access pilot. No regulatory certification implied. Sessions expire; password recovery is not yet available.</div>
         </form>
       </div>
