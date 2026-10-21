@@ -40,27 +40,38 @@ export default function Home() {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    const fragment = new URLSearchParams(window.location.hash.slice(1));
-    const verify = fragment.get("verify");
-    const reset = fragment.get("reset");
-    const invite = fragment.get("invite");
-    if (verify || reset || invite) {
-      // Remove recovery secrets from browser history immediately.
-      window.history.replaceState(null, "", window.location.pathname);
+    // Mail links may be opened in a tab already displaying the sign-in page.
+    // React doesn't remount on a hash-only navigation, so listen for hashchange.
+    function processAuthLink() {
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      const verify = fragment.get("verify");
+      const reset = fragment.get("reset");
+      const invite = fragment.get("invite");
+      if (!verify && !reset && !invite) return;
+      // Remove single-use secrets from the visible browser URL immediately.
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (invite) {
+        void Promise.resolve().then(() => {
+          setInviteSecret(invite); setRegisterMode(false); setForgotMode(false); setError("");
+        });
+      }
+      if (reset) {
+        void Promise.resolve().then(() => {
+          setResetSecret(reset); setForgotMode(false); setRegisterMode(false); setError("");
+        });
+      }
+      if (verify) {
+        api<{ detail: string }>("/api/auth/verify-email", "", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: verify })
+        }).then((result) => {
+          setNotice(result.detail); setError(""); setForgotMode(false);
+        }).catch((err) => setError(err instanceof Error ? err.message : "Verification failed"));
+      }
     }
-    if (invite) void Promise.resolve().then(() => { setInviteSecret(invite); setRegisterMode(false); setForgotMode(false); });
-    if (reset) {
-      void Promise.resolve().then(() => {
-        setResetSecret(reset); setForgotMode(false); setRegisterMode(false);
-      });
-    }
-    if (verify) {
-      api<{ detail: string }>("/api/auth/verify-email", "", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: verify })
-      }).then((result) => { setNotice(result.detail); setForgotMode(false); })
-        .catch((err) => setError(err instanceof Error ? err.message : "Verification failed"));
-    }
+    processAuthLink();
+    window.addEventListener("hashchange", processAuthLink);
+    return () => window.removeEventListener("hashchange", processAuthLink);
   }, []);
 
   async function submitInvite(event: FormEvent) {
