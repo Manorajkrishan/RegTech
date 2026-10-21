@@ -298,7 +298,9 @@ def test_billing_requires_config_and_signed_webhooks(monkeypatch):
         assert response.status_code == 200 and response.json()["plan"] == "free"
         assert client.post("/api/billing/checkout", headers=owner).status_code == 503
         assert client.post("/api/billing/webhook", content=b"{}").status_code == 503
-        monkeypatch.setattr(settings, "stripe_webhook_secret", "unit-local-webhook-value")
+        monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+        monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_unit_local")
+        monkeypatch.setattr(settings, "stripe_price_id", "price_unit_local")
         assert client.post("/api/billing/webhook", content=b"{}",
                            headers={"stripe-signature": "invalid"}).status_code == 400
 
@@ -308,10 +310,14 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
     from app.config import settings
     from types import SimpleNamespace
 
-    monkeypatch.setattr(settings, "stripe_secret_key", "unit-local-key")
-    monkeypatch.setattr(settings, "stripe_webhook_secret", "unit-local-webhook-value")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_unit_local")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
     monkeypatch.setattr(settings, "stripe_price_id", "price_for_unit_tests")
-    async def provider(fn, **kwargs):
+    async def provider(fn, *args, **kwargs):
+        if fn == billing.stripe.Price.retrieve:
+            return {"id": "price_for_unit_tests", "active": True, "livemode": False,
+                    "type": "recurring", "recurring": {"interval": "month"},
+                    "currency": "gbp", "unit_amount": 1900}
         if "email" in kwargs:
             return SimpleNamespace(id="cus_fixture")
         return SimpleNamespace(url="https://checkout.stripe.com/test-only")
@@ -319,12 +325,15 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
 
     with TestClient(app) as client:
         owner = register(client, identity())
+        offer = client.get("/api/billing/offer", headers=owner)
+        assert offer.status_code == 200, offer.text
+        assert offer.json() == {"currency": "gbp", "unit_amount": 1900, "interval": "month"}
         checkout = client.post("/api/billing/checkout", headers=owner)
         assert checkout.status_code == 200, checkout.text
         event = {
             "id": "evt_" + str(uuid4()),
             "type": "customer.subscription.updated",
-            "created": 1000,
+            "created": 1000, "livemode": False,
             "data": {"object": {
                 "id": "sub_test", "customer": "cus_fixture",
                 "status": "active", "items": {"data": [{
@@ -348,3 +357,113 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
             "stripe-signature": "mock"
         }).status_code == 200
         assert client.get("/api/billing/status", headers=owner).json()["plan"] == "free"
+
+
+
+def test_stripe_environment_gate_never_activates_live_key_by_accident(monkeypatch):
+    from app.config import settings
+    from app.billing import billing_mode
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+    monkeypatch.setattr(settings, "stripe_price_id", "price_unit_local")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_live_mocked_not_real")
+    monkeypatch.setattr(settings, "stripe_live_billing_enabled", False)
+    monkeypatch.setattr(settings, "environment", "development")
+    assert billing_mode() is None
+    monkeypatch.setattr(settings, "environment", "production")
+    assert billing_mode() is None
+    monkeypatch.setattr(settings, "stripe_live_billing_enabled", True)
+    assert billing_mode() == "live"
+    monkeypatch.setattr(settings, "environment", "staging")
+    assert billing_mode() is None
+    monkeypatch.setattr(settings, "stripe_live_billing_enabled", False)
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mocked_not_real")
+    assert billing_mode() == "test"
+    monkeypatch.setattr(settings, "environment", "production")
+    assert billing_mode() is None
+
+
+def test_stripe_offer_rejects_wrong_mode_and_price(monkeypatch):
+    from app import billing
+    from app.config import settings
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mocked_not_real")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+    monkeypatch.setattr(settings, "stripe_price_id", "price_mocked")
+    monkeypatch.setattr(settings, "stripe_expected_currency", "gbp")
+    seen = []
+
+    async def provider(fn, *args, **kwargs):
+        seen.append(fn)
+        return {"id": "price_mocked", "active": True, "livemode": True,
+                "type": "recurring", "recurring": {"interval": "month"},
+                "currency": "gbp", "unit_amount": 1900}
+    monkeypatch.setattr(billing, "stripe_call", provider)
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        result = client.get("/api/billing/offer", headers=owner)
+        assert result.status_code == 503
+        result = client.post("/api/billing/checkout", headers=owner)
+        assert result.status_code == 503
+        assert len(seen) == 2  # Price checked; no Customer or Checkout is created.
+
+
+def test_stripe_webhook_rejects_wrong_environment(monkeypatch):
+    from app import billing
+    from app.config import settings
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mocked_not_real")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+    monkeypatch.setattr(settings, "stripe_price_id", "price_mocked")
+    monkeypatch.setattr(billing.stripe.Webhook, "construct_event",
+                        lambda body, signature, secret: {
+                            "id": "evt_" + str(uuid4()),
+                            "type": "customer.subscription.created",
+                            "livemode": True,
+                            "created": 100,
+                            "data": {"object": {"id": "sub_test", "customer": "cus_fake",
+                                                "status": "active", "items": {"data": []}}}
+                        })
+    with TestClient(app) as client:
+        response = client.post("/api/billing/webhook", content=b"{}",
+                               headers={"stripe-signature": "unit_test_only"})
+        assert response.status_code == 400
+
+
+
+def test_real_stripe_webhook_signature_without_external_network(monkeypatch):
+    """Exercise Stripe's actual signature verifier; no Stripe API call or charge."""
+    import hashlib
+    import hmac
+    import json
+    import time
+    from app.config import settings
+
+    secret = "whsec_synthetic_local_secret_only"
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_not_a_real_key")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_price_id", "price_nonexistent_fixture")
+    event = {
+        "id": "evt_" + str(uuid4()),
+        "object": "event", "api_version": "2025-04-30.basil",
+        "livemode": False, "created": int(time.time()),
+        "type": "customer.subscription.updated",
+        "data": {"object": {"id": "sub_not_real", "customer": "cus_not_real",
+                            "object": "subscription", "status": "active",
+                            "items": {"data": []}}}
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+    timestamp = int(time.time())
+    signature = hmac.new(secret.encode(), str(timestamp).encode() + b"." + body,
+                         hashlib.sha256).hexdigest()
+    signature_header = "t=" + str(timestamp) + ",v1=" + signature
+    with TestClient(app) as client:
+        first = client.post("/api/billing/webhook", content=body,
+                            headers={"stripe-signature": signature_header})
+        assert first.status_code == 200, first.text
+        duplicate = client.post("/api/billing/webhook", content=body,
+                                headers={"stripe-signature": signature_header})
+        assert duplicate.status_code == 200 and duplicate.json()["duplicate"] is True
+        invalid = client.post("/api/billing/webhook", content=body,
+                              headers={"stripe-signature": "t=123,v1=bad"})
+        assert invalid.status_code == 400

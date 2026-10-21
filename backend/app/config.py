@@ -27,9 +27,15 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_price_id: str = ""
     free_activity_limit: int = 25
+    stripe_live_billing_enabled: bool = False
+    stripe_expected_currency: str = "gbp"
 
     def validate_security(self):
-        if self.environment == "production":
+        if self.environment not in ("development", "staging", "production"):
+            raise RuntimeError("Unknown environment; billing disabled")
+        if self.stripe_live_billing_enabled and self.environment != "production":
+            raise RuntimeError("Live Stripe billing can only be enabled in production")
+        if self.environment in ("production", "staging"):
             if len(self.secret_key) < 32:
                 raise RuntimeError("Production requires SECRET_KEY of at least 32 characters")
             if self.db_url.startswith("sqlite"):

@@ -14,15 +14,55 @@ from .team import require_owner
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 
+def billing_mode() -> str | None:
+    """Fail-closed boundary: never use live Stripe keys outside an explicitly enabled production account."""
+    if not (
+        settings.stripe_webhook_secret.startswith("whsec_")
+        and settings.stripe_price_id.startswith("price_")
+    ):
+        return None
+    if settings.environment in ("development", "staging") and settings.stripe_secret_key.startswith("sk_test_"):
+        return "test"
+    if (
+        settings.environment == "production"
+        and settings.stripe_live_billing_enabled
+        and settings.stripe_secret_key.startswith("sk_live_")
+    ):
+        return "live"
+    return None
+
+
 def configured() -> bool:
-    return bool(
-        settings.stripe_secret_key and settings.stripe_webhook_secret
-        and settings.stripe_price_id
-    )
+    return billing_mode() is not None
 
 
-async def stripe_call(fn, **kwargs):
-    return await asyncio.to_thread(fn, **kwargs)
+async def verified_price():
+    """Stripe itself must confirm the configured recurring price and billing environment."""
+    mode = billing_mode()
+    if mode is None:
+        raise HTTPException(503, "Billing is not configured for this environment")
+    stripe.api_key = settings.stripe_secret_key
+    try:
+        price = await stripe_call(stripe.Price.retrieve, settings.stripe_price_id)
+    except stripe.StripeError as exc:
+        raise HTTPException(502, "Unable to verify current subscription price") from exc
+    recurrence = price.get("recurring") or {}
+    if not (
+        price.get("id") == settings.stripe_price_id
+        and price.get("active") is True
+        and price.get("livemode") is (mode == "live")
+        and price.get("type") == "recurring"
+        and recurrence.get("interval") in ("month", "year")
+        and price.get("currency") == settings.stripe_expected_currency.lower()
+        and isinstance(price.get("unit_amount"), int)
+        and price["unit_amount"] > 0
+    ):
+        raise HTTPException(503, "Configured price failed verification (mode, currency, recurring or active)")
+    return price
+
+
+async def stripe_call(fn, *args, **kwargs):
+    return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 @router.get("/status")
@@ -35,9 +75,22 @@ async def status(
         "plan": "pro" if paid else "free",
         "subscription_status": org.subscription_status,
         "checkout_available": configured(),
+        "billing_mode": billing_mode() or "disabled",
         "free_activity_limit": settings.free_activity_limit,
         "free_team_limit": 3,
         "can_manage_billing": user.role == "owner"
+    }
+
+
+@router.get("/offer")
+async def offer(
+    user: User = Depends(current_user)
+):
+    """Offer price comes from Stripe; never guess it in the frontend."""
+    price = await verified_price()
+    return {
+        "currency": price["currency"], "unit_amount": price["unit_amount"],
+        "interval": price["recurring"]["interval"]
     }
 
 
@@ -51,6 +104,7 @@ async def checkout(
     org = await db.get(Organisation, user.org_id)
     if org.subscription_status in ("active", "trialing"):
         raise HTTPException(409, "Subscription already active; open billing portal")
+    await verified_price()
     stripe.api_key = settings.stripe_secret_key
     try:
         if not org.stripe_customer_id:
@@ -100,8 +154,9 @@ async def portal(
 
 @router.post("/webhook")
 async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
-    if not settings.stripe_webhook_secret:
-        raise HTTPException(503, "Billing webhook is not configured")
+    mode = billing_mode()
+    if mode is None:
+        raise HTTPException(503, "Billing webhook is not configured for this environment")
     data = await request.body()
     if len(data) > 262144:
         raise HTTPException(413, "Webhook too large")
@@ -112,6 +167,9 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         )
     except (ValueError, stripe.SignatureVerificationError):
         raise HTTPException(400, "Invalid Stripe signature or payload")
+
+    if event.get("livemode") is not (mode == "live"):
+        raise HTTPException(400, "Stripe event mode does not match the configured account")
 
     if await db.get(BillingEvent, event["id"]):
         return {"received": True, "duplicate": True}
@@ -125,13 +183,28 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
         ).with_for_update())
         if org is not None:
             timestamp = int(event.get("created", 0))
-            if timestamp >= org.subscription_event_created:
+            subscription_id = obj.get("id")
+            foreign_active_subscription = (
+                org.subscription_id
+                and org.subscription_id != subscription_id
+                and org.subscription_status in ("active", "trialing")
+            )
+            state = obj.get("status", "inactive")
+            # An equal-timestamp cancellation/downgrade wins against an upgrade:
+            # Stripe event delivery can be out of order within the same second.
+            should_update = (
+                timestamp > org.subscription_event_created
+                or (
+                    timestamp == org.subscription_event_created
+                    and state not in ("active", "trialing")
+                )
+            )
+            if not foreign_active_subscription and subscription_id and should_update:
                 prices = {
                     entry.get("price", {}).get("id")
                     for entry in obj.get("items", {}).get("data", [])
                 }
                 eligible = settings.stripe_price_id in prices
-                state = obj.get("status", "inactive")
                 # A signed update with unrelated price or unrecognized state does NOT unlock access.
                 org.subscription_status = state if eligible and state in (
                     "active", "trialing"
