@@ -63,3 +63,32 @@ yet. Stripe and SMTP connectors are implementation-ready but not connected.
 There is no immutable third-party-assured report sign-off, no encrypted
 document vault, no Xero/Sage integration, no multi-organisation member identity
 and no live end-user environment. These are product work, not cosmetic tasks.
+
+## Stripe billing isolation and pricing guard (v0.6)
+
+RegTech is intentionally **not connected to any live Stripe account**.
+An enabled Stripe connection is not itself permission to charge anyone.
+For a safe sandbox setup, create an isolated **test-mode / sandbox**
+Stripe account and configure the following secrets only in a private staging
+secret manager (never in GitHub or screenshots):
+
+- `STRIPE_SECRET_KEY=sk_test_...` from the selected sandbox
+- `STRIPE_WEBHOOK_SECRET=whsec_...` from an actual sandbox webhook destination
+- `STRIPE_PRICE_ID=price_...` for a **verified active recurring GBP** Stripe price
+- `STRIPE_EXPECTED_CURRENCY=gbp` for pilot pricing
+- `STRIPE_LIVE_BILLING_ENABLED=false` at all times outside an explicitly
+  approved production launch
+
+Stripe Checkout re-verifies the Price via Stripe API before creating a customer.
+The API never grants paid access based on a browser redirect; verified
+subscription webhooks must match the configured mode, expected Price and
+organisation customer. Entitlements for an already-active subscription cannot
+be silently overwritten by a different subscription under the same customer.
+Out-of-order same-second cancellation/downgrade wins conservatively.
+No webhook endpoint is registered in Stripe by this code.
+
+**Before real paid rollout:** get merchant identity, price and VAT/tax treatment
+approved; enable live mode deliberately in the production environment only,
+configure HTTPS, dashboard webhook signing secret, invoicing, failed payments,
+grace periods/cancelation policy and reconciliation. Validate all lifecycle
+paths using a sandbox first. Avoid storing credentials in the repository.

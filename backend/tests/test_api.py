@@ -298,7 +298,9 @@ def test_billing_requires_config_and_signed_webhooks(monkeypatch):
         assert response.status_code == 200 and response.json()["plan"] == "free"
         assert client.post("/api/billing/checkout", headers=owner).status_code == 503
         assert client.post("/api/billing/webhook", content=b"{}").status_code == 503
-        monkeypatch.setattr(settings, "stripe_webhook_secret", "unit-local-webhook-value")
+        monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+        monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_unit_local")
+        monkeypatch.setattr(settings, "stripe_price_id", "price_unit_local")
         assert client.post("/api/billing/webhook", content=b"{}",
                            headers={"stripe-signature": "invalid"}).status_code == 400
 
@@ -308,10 +310,14 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
     from app.config import settings
     from types import SimpleNamespace
 
-    monkeypatch.setattr(settings, "stripe_secret_key", "unit-local-key")
-    monkeypatch.setattr(settings, "stripe_webhook_secret", "unit-local-webhook-value")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_unit_local")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
     monkeypatch.setattr(settings, "stripe_price_id", "price_for_unit_tests")
     async def provider(fn, **kwargs):
+        if fn == billing.stripe.Price.retrieve:
+            return {"id": "price_for_unit_tests", "active": True, "livemode": False,
+                    "type": "recurring", "recurring": {"interval": "month"},
+                    "currency": "gbp", "unit_amount": 1900}
         if "email" in kwargs:
             return SimpleNamespace(id="cus_fixture")
         return SimpleNamespace(url="https://checkout.stripe.com/test-only")
@@ -324,7 +330,7 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
         event = {
             "id": "evt_" + str(uuid4()),
             "type": "customer.subscription.updated",
-            "created": 1000,
+            "created": 1000, "livemode": False,
             "data": {"object": {
                 "id": "sub_test", "customer": "cus_fixture",
                 "status": "active", "items": {"data": [{
