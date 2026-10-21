@@ -354,3 +354,73 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
             "stripe-signature": "mock"
         }).status_code == 200
         assert client.get("/api/billing/status", headers=owner).json()["plan"] == "free"
+
+
+
+def test_stripe_environment_gate_never_activates_live_key_by_accident(monkeypatch):
+    from app.config import settings
+    from app.billing import billing_mode
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+    monkeypatch.setattr(settings, "stripe_price_id", "price_unit_local")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_live_mocked_not_real")
+    monkeypatch.setattr(settings, "stripe_live_billing_enabled", False)
+    monkeypatch.setattr(settings, "environment", "development")
+    assert billing_mode() is None
+    monkeypatch.setattr(settings, "environment", "production")
+    assert billing_mode() is None
+    monkeypatch.setattr(settings, "stripe_live_billing_enabled", True)
+    assert billing_mode() == "live"
+    monkeypatch.setattr(settings, "environment", "staging")
+    assert billing_mode() is None
+    monkeypatch.setattr(settings, "stripe_live_billing_enabled", False)
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mocked_not_real")
+    assert billing_mode() == "test"
+    monkeypatch.setattr(settings, "environment", "production")
+    assert billing_mode() is None
+
+
+def test_stripe_offer_rejects_wrong_mode_and_price(monkeypatch):
+    from app import billing
+    from app.config import settings
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mocked_not_real")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+    monkeypatch.setattr(settings, "stripe_price_id", "price_mocked")
+    monkeypatch.setattr(settings, "stripe_expected_currency", "gbp")
+    seen = []
+
+    async def provider(fn, *args, **kwargs):
+        seen.append(fn)
+        return {"id": "price_mocked", "active": True, "livemode": True,
+                "type": "recurring", "recurring": {"interval": "month"},
+                "currency": "gbp", "unit_amount": 1900}
+    monkeypatch.setattr(billing, "stripe_call", provider)
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        result = client.get("/api/billing/offer", headers=owner)
+        assert result.status_code == 503
+        result = client.post("/api/billing/checkout", headers=owner)
+        assert result.status_code == 503
+        assert len(seen) == 2  # Price checked; no Customer or Checkout is created.
+
+
+def test_stripe_webhook_rejects_wrong_environment(monkeypatch):
+    from app import billing
+    from app.config import settings
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_mocked_not_real")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
+    monkeypatch.setattr(settings, "stripe_price_id", "price_mocked")
+    monkeypatch.setattr(billing.stripe.Webhook, "construct_event",
+                        lambda body, signature, secret: {
+                            "id": "evt_" + str(uuid4()),
+                            "type": "customer.subscription.created",
+                            "livemode": True,
+                            "created": 100,
+                            "data": {"object": {"id": "sub_test", "customer": "cus_fake",
+                                                "status": "active", "items": {"data": []}}}
+                        })
+    with TestClient(app) as client:
+        response = client.post("/api/billing/webhook", content=b"{}",
+                               headers={"stripe-signature": "unit_test_only"})
+        assert response.status_code == 400
