@@ -63,6 +63,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Browser E2E with actual Mailpit email and reporting
         run: python backend/scripts/browser_e2e.py
+      - name: Browser E2E with team invitation, reviewer approval and reset
+        run: python backend/scripts/team_browser_e2e.py
       - name: Upload synthetic browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
