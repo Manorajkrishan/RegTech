@@ -250,7 +250,7 @@ export default function Home() {
           <button className="btn primary full" disabled={busy}>{busy ? "Working…" : inviteSecret ? "Join workspace" : resetSecret ? "Update password" : forgotMode ? "Send reset link" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
           {!inviteSecret && !resetSecret && <button className="text-button" type="button" onClick={() => { setRegisterMode(false); setForgotMode(!forgotMode); setError(""); setNotice(""); }}>{forgotMode ? "Back to sign in" : "Forgot your password?"}</button>}
           {!inviteSecret && !resetSecret && !forgotMode && <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>}
-          <div className="tiny-note">Early access pilot. No regulatory certification implied. Sessions expire; password recovery is not yet available.</div>
+          <div className="tiny-note">Early access pilot. Not certified for regulatory submission. For secure accounts, sessions expire and email-based password recovery is available when email delivery is configured.</div>
         </form>
       </div>
     </main>;

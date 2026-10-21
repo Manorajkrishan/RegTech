@@ -48,6 +48,18 @@ def _send_smtp(recipient: str, subject: str, body: str) -> None:
     email["To"] = recipient
     email["Subject"] = subject
     email.set_content(body)
+    # Explicitly allow cleartext SMTP only to our internal Mailpit container
+    # in local development. All deployed production email retains TLS + auth.
+    if (
+        settings.environment == "development"
+        and settings.smtp_host == "mailpit"
+        and settings.smtp_port == 1025
+        and not settings.smtp_username
+        and not settings.smtp_password
+    ):
+        with smtplib.SMTP("mailpit", 1025, timeout=15) as server:
+            server.send_message(email)
+        return
     context = ssl.create_default_context()
     if settings.smtp_port == 465:
         with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15, context=context) as server:
