@@ -2,6 +2,8 @@
 import json
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from time import monotonic, sleep
+import re
 
 API = "http://127.0.0.1:8000"
 
@@ -31,7 +33,29 @@ account = {
 }
 status, created = request("/api/auth/register", "POST", account)
 assert status == 201, (status, created)
-token = created["access_token"]
+# Local pilot emails are only captured by Mailpit; no external deliveries.
+assert "Check your email" in created["detail"]
+deadline = monotonic() + 18
+verify_token = None
+while monotonic() < deadline:
+    try:
+        with urlopen("http://127.0.0.1:8025/view/latest.txt", timeout=4) as result:
+            body = result.read().decode()
+        match = re.search(r"/#verify=([A-Za-z0-9_-]+)", body)
+        if match:
+            verify_token = match.group(1)
+            break
+    except Exception:
+        pass
+    sleep(0.4)
+assert verify_token is not None, "Mailpit verification email never arrived"
+status, response = request("/api/auth/verify-email", "POST", {"token": verify_token})
+assert status == 200, (status, response)
+status, logged_in = request("/api/auth/login", "POST", {
+    "email": account["email"], "password": account["password"]
+})
+assert status == 200, (status, logged_in)
+token = logged_in["access_token"]
 status, me = request("/api/me", token=token)
 assert status == 200 and me["organisation"] == account["organisation"]
 assert me["role"] == "owner"
