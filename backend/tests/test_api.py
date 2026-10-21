@@ -313,7 +313,7 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_unit_local")
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_unit_local")
     monkeypatch.setattr(settings, "stripe_price_id", "price_for_unit_tests")
-    async def provider(fn, **kwargs):
+    async def provider(fn, *args, **kwargs):
         if fn == billing.stripe.Price.retrieve:
             return {"id": "price_for_unit_tests", "active": True, "livemode": False,
                     "type": "recurring", "recurring": {"interval": "month"},
