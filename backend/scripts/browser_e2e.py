@@ -60,7 +60,7 @@ with sync_playwright() as pw:
         expect(page.get_by_text(activity_name, exact=True)).to_be_visible()
         page.get_by_role("button", name="Approve", exact=True).click()
         expect(page.get_by_text("Record approved and included in your draft inventory.")).to_be_visible()
-        page.get_by_role("button", name="Overview", exact=True).click()
+        page.get_by_role("button", name=re.compile("Overview")).click()
         with page.expect_download() as caught:
             page.get_by_role("button", name=re.compile("CSV export")).click()
         assert activity_name in caught.value.path().read_text()
