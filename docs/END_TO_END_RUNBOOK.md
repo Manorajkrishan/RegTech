@@ -63,3 +63,26 @@ yet. Stripe and SMTP connectors are implementation-ready but not connected.
 There is no immutable third-party-assured report sign-off, no encrypted
 document vault, no Xero/Sage integration, no multi-organisation member identity
 and no live end-user environment. These are product work, not cosmetic tasks.
+
+## Browser acceptance suite
+
+Pull requests now run **Chromium Playwright** against ephemeral, localhost-bound
+PostgreSQL, FastAPI and Next.js containers. Browser tests exercise new workspace
+registration, measured activity entry, owner approval, 2026 report export,
+logout and subsequent login, as well as unauthenticated API rejection.
+
+Run locally only with a **private test database and synthetic records**:
+
+```bash
+# Root: configure REGTECH_DB_PASSWORD and REGTECH_SECRET_KEY in uncommitted .env
+# Run docker compose up --build -d and verify http://127.0.0.1:3000
+cd frontend
+npm ci
+npm install --no-save --package-lock=false @playwright/test@1.56.1
+npx playwright install chromium
+npx playwright test --config=playwright.config.ts
+```
+
+Browser tests are not a substitute for real SMTP, Stripe test-mode payment
+reconciliation, accessibility audits or penetration testing. Chromium CI
+uses development-mode signup, and it does not verify production HTTPS.
