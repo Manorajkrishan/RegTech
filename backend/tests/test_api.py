@@ -325,6 +325,9 @@ def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
 
     with TestClient(app) as client:
         owner = register(client, identity())
+        offer = client.get("/api/billing/offer", headers=owner)
+        assert offer.status_code == 200, offer.text
+        assert offer.json() == {"currency": "gbp", "unit_amount": 1900, "interval": "month"}
         checkout = client.post("/api/billing/checkout", headers=owner)
         assert checkout.status_code == 200, checkout.text
         event = {
@@ -424,3 +427,43 @@ def test_stripe_webhook_rejects_wrong_environment(monkeypatch):
         response = client.post("/api/billing/webhook", content=b"{}",
                                headers={"stripe-signature": "unit_test_only"})
         assert response.status_code == 400
+
+
+
+def test_real_stripe_webhook_signature_without_external_network(monkeypatch):
+    """Exercise Stripe's actual signature verifier; no Stripe API call or charge."""
+    import hashlib
+    import hmac
+    import json
+    import time
+    from app.config import settings
+
+    secret = "whsec_synthetic_local_secret_only"
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_not_a_real_key")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    monkeypatch.setattr(settings, "stripe_price_id", "price_nonexistent_fixture")
+    event = {
+        "id": "evt_" + str(uuid4()),
+        "object": "event", "api_version": "2025-04-30.basil",
+        "livemode": False, "created": int(time.time()),
+        "type": "customer.subscription.updated",
+        "data": {"object": {"id": "sub_not_real", "customer": "cus_not_real",
+                            "object": "subscription", "status": "active",
+                            "items": {"data": []}}}
+    }
+    body = json.dumps(event, separators=(",", ":")).encode()
+    timestamp = int(time.time())
+    signature = hmac.new(secret.encode(), str(timestamp).encode() + b"." + body,
+                         hashlib.sha256).hexdigest()
+    signature_header = "t=" + str(timestamp) + ",v1=" + signature
+    with TestClient(app) as client:
+        first = client.post("/api/billing/webhook", content=body,
+                            headers={"stripe-signature": signature_header})
+        assert first.status_code == 200, first.text
+        duplicate = client.post("/api/billing/webhook", content=body,
+                                headers={"stripe-signature": signature_header})
+        assert duplicate.status_code == 200 and duplicate.json()["duplicate"] is True
+        invalid = client.post("/api/billing/webhook", content=body,
+                              headers={"stripe-signature": "t=123,v1=bad"})
+        assert invalid.status_code == 400
