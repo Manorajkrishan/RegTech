@@ -13,6 +13,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+  # Development-only message capture. SMTP is accessible solely within Docker;
+  # Mailpit's message UI is bound to this machine's loopback address.
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    environment:
+      MP_MAX_MESSAGES: "300"
+    ports:
+      - "127.0.0.1:8025:8025"
   api:
     build:
       context: .
@@ -23,15 +31,18 @@ services:
       DB_URL: postgresql+asyncpg://regtech:${REGTECH_DB_PASSWORD}@db:5432/regtech
       CORS_ORIGINS: http://127.0.0.1:3000
       APP_PUBLIC_URL: http://127.0.0.1:3000
-      REQUIRE_EMAIL_VERIFICATION: "false"
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_SENDER: ${SMTP_SENDER:-}
+      REQUIRE_EMAIL_VERIFICATION: "true"
+      # Dedicated, non-delivering local SMTP sink; NEVER use in hosted production.
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_SENDER: "regtech-pilot@example.com"
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     ports:
       - "127.0.0.1:8000:8000"
   web:

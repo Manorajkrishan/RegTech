@@ -40,27 +40,38 @@ export default function Home() {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    const fragment = new URLSearchParams(window.location.hash.slice(1));
-    const verify = fragment.get("verify");
-    const reset = fragment.get("reset");
-    const invite = fragment.get("invite");
-    if (verify || reset || invite) {
-      // Remove recovery secrets from browser history immediately.
-      window.history.replaceState(null, "", window.location.pathname);
+    // Mail links may be opened in a tab already displaying the sign-in page.
+    // React doesn't remount on a hash-only navigation, so listen for hashchange.
+    function processAuthLink() {
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      const verify = fragment.get("verify");
+      const reset = fragment.get("reset");
+      const invite = fragment.get("invite");
+      if (!verify && !reset && !invite) return;
+      // Remove single-use secrets from the visible browser URL immediately.
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (invite) {
+        void Promise.resolve().then(() => {
+          setInviteSecret(invite); setRegisterMode(false); setForgotMode(false); setError("");
+        });
+      }
+      if (reset) {
+        void Promise.resolve().then(() => {
+          setResetSecret(reset); setForgotMode(false); setRegisterMode(false); setError("");
+        });
+      }
+      if (verify) {
+        api<{ detail: string }>("/api/auth/verify-email", "", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: verify })
+        }).then((result) => {
+          setNotice(result.detail); setError(""); setForgotMode(false);
+        }).catch((err) => setError(err instanceof Error ? err.message : "Verification failed"));
+      }
     }
-    if (invite) void Promise.resolve().then(() => { setInviteSecret(invite); setRegisterMode(false); setForgotMode(false); });
-    if (reset) {
-      void Promise.resolve().then(() => {
-        setResetSecret(reset); setForgotMode(false); setRegisterMode(false);
-      });
-    }
-    if (verify) {
-      api<{ detail: string }>("/api/auth/verify-email", "", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: verify })
-      }).then((result) => { setNotice(result.detail); setForgotMode(false); })
-        .catch((err) => setError(err instanceof Error ? err.message : "Verification failed"));
-    }
+    processAuthLink();
+    window.addEventListener("hashchange", processAuthLink);
+    return () => window.removeEventListener("hashchange", processAuthLink);
   }, []);
 
   async function submitInvite(event: FormEvent) {
@@ -250,7 +261,7 @@ export default function Home() {
           <button className="btn primary full" disabled={busy}>{busy ? "Working…" : inviteSecret ? "Join workspace" : resetSecret ? "Update password" : forgotMode ? "Send reset link" : registerMode ? "Create workspace" : "Sign in"} <span>→</span></button>
           {!inviteSecret && !resetSecret && <button className="text-button" type="button" onClick={() => { setRegisterMode(false); setForgotMode(!forgotMode); setError(""); setNotice(""); }}>{forgotMode ? "Back to sign in" : "Forgot your password?"}</button>}
           {!inviteSecret && !resetSecret && !forgotMode && <button className="text-button" type="button" onClick={() => { setRegisterMode(!registerMode); setError(""); setNotice(""); }}>{registerMode ? "Already have an account? Sign in" : "New to RegTech? Create a workspace"}</button>}
-          <div className="tiny-note">Early access pilot. No regulatory certification implied. Sessions expire; password recovery is not yet available.</div>
+          <div className="tiny-note">Early access pilot. Not certified for regulatory submission. For secure accounts, sessions expire and email-based password recovery is available when email delivery is configured.</div>
         </form>
       </div>
     </main>;

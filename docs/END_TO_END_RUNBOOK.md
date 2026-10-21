@@ -17,10 +17,12 @@ a production deployment. The Docker Compose stack binds frontend and API to
 8. Backup: `docker compose exec -T db pg_dump -U regtech -d regtech > local-backup.sql`.
    Encrypt and safeguard this SQL file. To stop: `docker compose down`.
 
-Compose uses **development mode**: email verification is off and the DB schema
-is automatically created. It is strictly for local testing, **not real customers**.
-Team invitations require independently configured SMTP; without SMTP, invite
-endpoints return 503. Stripe billing is disabled until credentials and an
+Compose uses **development mode**: email verification runs through Mailpit
+and database tables are automatically created. It is strictly for local testing, **not real customers**.
+Local email is captured by Mailpit at **http://127.0.0.1:8025**. It is a
+non-delivering SMTP sink, accessible from localhost only. Send an invitation
+or password reset, then open Mailpit to copy the one-time link. These emails
+are never delivered to the real internet by the local pilot. Stripe billing is disabled until credentials and an
 approved Stripe Price ID are configured on a controlled staging service.
 
 ## Customer product journey
