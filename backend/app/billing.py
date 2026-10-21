@@ -61,8 +61,8 @@ async def verified_price():
     return price
 
 
-async def stripe_call(fn, **kwargs):
-    return await asyncio.to_thread(fn, **kwargs)
+async def stripe_call(fn, *args, **kwargs):
+    return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 @router.get("/status")
