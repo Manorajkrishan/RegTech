@@ -7,9 +7,11 @@ type Member = { id: string; email: string; role: string; is_active: boolean };
 type Invitation = { id: string; email: string; role: string; expires_at: string };
 type Team = { members: Member[]; pending: Invitation[] };
 type Billing = {
-  plan: string; subscription_status: string; checkout_available: boolean;
+  plan: string; subscription_status: string; checkout_available: boolean; billing_mode: "disabled" | "test" | "live";
   free_activity_limit: number; free_team_limit: number; can_manage_billing: boolean;
 };
+
+type VerifiedOffer = { currency: string; unit_amount: number; interval: "month" | "year" };
 
 function displayError(err: unknown) {
   return err instanceof Error ? err.message : "Request unsuccessful";
@@ -23,13 +25,26 @@ export function TeamBilling({
 }) {
   const [team, setTeam] = useState<Team | null>(null);
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [offer, setOffer] = useState<VerifiedOffer | null>(null);
+  const [offerUnavailable, setOfferUnavailable] = useState(false);
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("editor");
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
     if (mode === "team") setTeam(await api<Team>("/api/team", token));
-    else setBilling(await api<Billing>("/api/billing/status", token));
+    else {
+      const info = await api<Billing>("/api/billing/status", token);
+      setBilling(info);
+      setOffer(null); setOfferUnavailable(false);
+      if (info.checkout_available && info.plan !== "pro") {
+        try {
+          setOffer(await api<VerifiedOffer>("/api/billing/offer", token));
+        } catch {
+          setOfferUnavailable(true); // Never enable checkout without a verified offer.
+        }
+      }
+    }
   }
 
   useEffect(() => {
@@ -108,9 +123,14 @@ export function TeamBilling({
     <div className="label-soft">SUBSCRIPTION</div>
     <h2 style={{ marginTop: 12 }}>Plan: {billing?.plan === "pro" ? "RegTech Pro" : "Free pilot"}</h2>
     <p>Status: <strong>{billing?.subscription_status ?? "Loading…"}</strong></p>
+    {offer && <p><strong>RegTech Pro: {new Intl.NumberFormat("en-GB", {
+      style: "currency", currency: offer.currency.toUpperCase()
+    }).format(offer.unit_amount / 100)} per {offer.interval}</strong></p>}
+    {billing?.billing_mode === "test" && <p>Stripe sandbox mode: no real payments will be collected.</p>}
+    {offerUnavailable && <p>Checkout is unavailable until its actual Stripe subscription price is verified.</p>}
     <p>Free plan supports {billing?.free_activity_limit ?? 25} non-voided activity records and {billing?.free_team_limit ?? 3} team members. Subscriptions become active only when a verified payment-provider webhook confirms payment status.</p>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-      {billing?.can_manage_billing && billing.checkout_available && billing.plan !== "pro" &&
+      {billing?.can_manage_billing && billing.checkout_available && !!offer && billing.plan !== "pro" &&
         <button className="btn primary" onClick={() => billingRedirect("/api/billing/checkout")} disabled={busy}>Upgrade securely with Stripe →</button>}
       {billing?.can_manage_billing && billing.checkout_available &&
         <button className="btn outline" onClick={() => billingRedirect("/api/billing/portal")} disabled={busy}>Manage subscription</button>}
