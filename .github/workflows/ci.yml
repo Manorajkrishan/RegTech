@@ -61,6 +61,54 @@ jobs:
         if: always()
         run: docker compose down --volumes
 
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      REGTECH_DB_PASSWORD: ci-playwright-only-password
+      REGTECH_SECRET_KEY: ci-playwright-placeholder-with-sufficient-length
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runner without changing production lockfile
+        working-directory: frontend
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Build and start private local stack
+        run: docker compose up --build --detach
+      - name: Wait for app readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/healthz >/dev/null &&
+               curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 3
+          done
+          docker compose ps
+          exit 1
+      - name: Run real Chromium end-to-end tests
+        working-directory: frontend
+        run: npx playwright test --config=playwright.config.ts
+      - name: Upload browser test traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regtech-browser-e2e-diagnostics
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --tail=100 --no-color
+      - name: Remove all synthetic test data
+        if: always()
+        run: docker compose down --volumes
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

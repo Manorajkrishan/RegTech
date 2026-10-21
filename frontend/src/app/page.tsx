@@ -149,6 +149,8 @@ export default function Home() {
     try { await api<{ detail: string }>("/api/auth/logout", token, { method: "POST" }); }
     catch { /* Expired or unreachable sessions are cleared locally regardless. */ }
     setToken(""); setUser(null); setCatalog(null); setSummary(null); setActivities([]);
+    setRegisterMode(false); setForgotMode(false); setResetSecret(""); setInviteSecret("");
+    setSection("overview"); setEditingId(""); setForm(blank());
     setHints(null); setIdentity({ organisation: "", email: "", password: "" });
     setError(""); setNotice("");
   }
