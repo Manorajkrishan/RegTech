@@ -65,7 +65,7 @@ with sync_playwright() as pw:
         owner.get_by_label("Evidence reference").fill("test meter bill")
         owner.get_by_role("button", name=re.compile("Save as draft")).click()
         expect(owner.get_by_text(activity, exact=True)).to_be_visible()
-        owner.get_by_role("button", name="Team", exact=True).click()
+        owner.get_by_role("button", name=re.compile("Team")).click()
         expect(owner.get_by_role("heading", name="Workspace members")).to_be_visible()
         owner.get_by_label("Email", exact=True).fill(reviewer_email)
         owner.get_by_label("Role", exact=True).select_option("reviewer")
