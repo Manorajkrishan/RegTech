@@ -45,7 +45,7 @@ with sync_playwright() as pw:
         expect(page.get_by_text("Email verified. You can sign in.")).to_be_visible()
         page.get_by_label("Work email").fill(email)
         page.get_by_label("Password", exact=True).fill(password)
-        page.get_by_role("button", name="Sign in", exact=True).click()
+        page.get_by_role("button", name=re.compile(r"^Sign in")).click()
         expect(page.get_by_role("heading", name="Overview.")).to_be_visible(timeout=15000)
 
         page.get_by_role("button", name=re.compile("Activity ledger")).click()
