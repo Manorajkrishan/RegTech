@@ -53,7 +53,7 @@ with sync_playwright() as pw:
         expect(owner.get_by_text("Email verified. You can sign in.")).to_be_visible()
         owner.get_by_label("Work email").fill(owner_email)
         owner.get_by_label("Password", exact=True).fill(password)
-        owner.get_by_role("button", name="Sign in", exact=True).click()
+        owner.get_by_role("button", name=re.compile(r"^Sign in")).click()
         expect(owner.get_by_role("heading", name="Overview.")).to_be_visible(timeout=15000)
         owner.get_by_role("button", name=re.compile("Activity ledger")).click()
         owner.get_by_label("Activity description").fill(activity)
