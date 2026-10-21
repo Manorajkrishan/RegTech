@@ -209,3 +209,142 @@ def test_login_lockout_after_repeated_failures():
         assert client.post("/api/auth/login", json={
             "email": account["email"], "password": account["password"]
         }).status_code == 401
+
+
+
+def test_team_workflow_and_role_permissions(monkeypatch):
+    from app import team as team_module
+    from app.rate_limit import reset_for_tests
+
+    reset_for_tests()
+    invitations = []
+
+    async def deliver(email, organization, secret):
+        invitations.append((email, secret))
+
+    monkeypatch.setattr(team_module, "send_invite", deliver)
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        separate = register(client, identity())
+        email = "team-" + str(uuid4())[:10] + "@example.com"
+        invited = client.post("/api/team/invitations", headers=owner,
+                              json={"email": email, "role": "editor"})
+        assert invited.status_code == 201, invited.text
+        accepted = client.post("/api/team/accept", json={
+            "token": invitations[-1][1], "password": "InvitePasswordValid2026!"
+        })
+        assert accepted.status_code == 200, accepted.text
+        editor = {"Authorization": "Bearer " + accepted.json()["access_token"]}
+        assert client.post("/api/team/accept", json={
+            "token": invitations[-1][1], "password": "InvitePasswordValid2026!"
+        }).status_code == 400
+        assert client.post("/api/team/invitations", headers=editor, json={
+            "email": "cannot@example.com", "role": "viewer"
+        }).status_code == 403
+        draft = client.post("/api/activities", headers=editor, json=activity())
+        assert draft.status_code == 201, draft.text
+        activity_id = draft.json()["id"]
+        assert client.patch("/api/activities/" + activity_id + "/approve",
+                            headers=editor).status_code == 403
+        assert client.patch("/api/activities/" + activity_id + "/approve",
+                            headers=separate).status_code == 404
+        roster = client.get("/api/team", headers=owner).json()
+        member = next(m for m in roster["members"] if m["email"] == email)
+        assert client.post("/api/team/members/" + member["id"] + "/deactivate",
+                           headers=owner).status_code == 200
+        assert client.get("/api/me", headers=editor).status_code == 401
+
+
+def test_atomic_csv_import_and_free_quota(monkeypatch):
+    from app.config import settings
+    from app.rate_limit import reset_for_tests
+
+    reset_for_tests()
+    headers = "description,supplier,activity_date,factor_id,quantity,unit,scope,evidence_reference\n"
+    valid = headers + (
+        "January power,Utility,2026-01-20,electricity,100,kWh,Scope 2,invoice-Jan\n"
+        "February power,Utility,2026-02-20,electricity,120,kWh,Scope 2,invoice-Feb\n"
+    )
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        wrong = valid.replace("120,kWh", "120,GBP")
+        response = client.post("/api/activities/import-csv", headers=owner,
+                               files={"file": ("entries.csv", wrong.encode(), "text/csv")})
+        assert response.status_code == 422
+        assert client.get("/api/activities", headers=owner).json() == []
+        good = client.post("/api/activities/import-csv", headers=owner,
+                           files={"file": ("entries.csv", valid.encode(), "text/csv")})
+        assert good.status_code == 201, good.text
+        assert good.json()["created"] == 2
+        assert all(row["status"] == "draft"
+                   for row in client.get("/api/activities", headers=owner).json())
+        monkeypatch.setattr(settings, "free_activity_limit", 2)
+        assert client.post("/api/activities", headers=owner, json=activity()).status_code == 402
+        row = client.get("/api/activities", headers=owner).json()[0]
+        assert client.patch("/api/activities/" + row["id"] + "/approve",
+                            headers=owner).status_code == 200
+        assert client.get("/api/reports/summary?year=2026",
+                          headers=owner).json()["approved_activity_count"] == 1
+        assert client.get("/api/reports/summary?year=2025",
+                          headers=owner).json()["approved_activity_count"] == 0
+
+
+
+def test_billing_requires_config_and_signed_webhooks(monkeypatch):
+    from app.config import settings
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        response = client.get("/api/billing/status", headers=owner)
+        assert response.status_code == 200 and response.json()["plan"] == "free"
+        assert client.post("/api/billing/checkout", headers=owner).status_code == 503
+        assert client.post("/api/billing/webhook", content=b"{}").status_code == 503
+        monkeypatch.setattr(settings, "stripe_webhook_secret", "unit-local-webhook-value")
+        assert client.post("/api/billing/webhook", content=b"{}",
+                           headers={"stripe-signature": "invalid"}).status_code == 400
+
+
+def test_stripe_event_is_idempotent_and_price_scoped(monkeypatch):
+    from app import billing
+    from app.config import settings
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(settings, "stripe_secret_key", "unit-local-key")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "unit-local-webhook-value")
+    monkeypatch.setattr(settings, "stripe_price_id", "price_for_unit_tests")
+    async def provider(fn, **kwargs):
+        if "email" in kwargs:
+            return SimpleNamespace(id="cus_fixture")
+        return SimpleNamespace(url="https://checkout.stripe.com/test-only")
+    monkeypatch.setattr(billing, "stripe_call", provider)
+
+    with TestClient(app) as client:
+        owner = register(client, identity())
+        checkout = client.post("/api/billing/checkout", headers=owner)
+        assert checkout.status_code == 200, checkout.text
+        event = {
+            "id": "evt_" + str(uuid4()),
+            "type": "customer.subscription.updated",
+            "created": 1000,
+            "data": {"object": {
+                "id": "sub_test", "customer": "cus_fixture",
+                "status": "active", "items": {"data": [{
+                    "price": {"id": "price_for_unit_tests"}
+                }]}
+            }}
+        }
+        monkeypatch.setattr(billing.stripe.Webhook, "construct_event",
+                            lambda body, sig, key: event)
+        url = "/api/billing/webhook"
+        first = client.post(url, content=b"{}", headers={"stripe-signature": "mock"})
+        assert first.status_code == 200, first.text
+        assert client.get("/api/billing/status", headers=owner).json()["plan"] == "pro"
+        assert client.post(url, content=b"{}", headers={
+            "stripe-signature": "mock"
+        }).json()["duplicate"] is True
+        event["id"] = "evt_" + str(uuid4())
+        event["created"] = 1001
+        event["data"]["object"]["items"]["data"][0]["price"]["id"] = "unrecognized"
+        assert client.post(url, content=b"{}", headers={
+            "stripe-signature": "mock"
+        }).status_code == 200
+        assert client.get("/api/billing/status", headers=owner).json()["plan"] == "free"

@@ -1,7 +1,7 @@
 """Organisation-isolated storage. Schema migration tooling needed before production."""
 from datetime import datetime, timezone
 from uuid import uuid4
-from sqlalchemy import String, Float, DateTime, ForeignKey, Text, Integer
+from sqlalchemy import String, Float, DateTime, ForeignKey, Text, Integer, Boolean, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
@@ -22,8 +22,14 @@ class Base(DeclarativeBase):
 
 class Organisation(Base):
     __tablename__ = "organisations"
+    __table_args__ = (UniqueConstraint("stripe_customer_id", name="uq_org_stripe_customer_id"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    subscription_status: Mapped[str] = mapped_column(String(30), nullable=False, default="free")
+    subscription_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    subscription_price_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    subscription_event_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -34,10 +40,32 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(Text)
     role: Mapped[str] = mapped_column(String(20), default="owner")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     session_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class TeamInvitation(Base):
+    __tablename__ = "team_invitations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organisations.id"), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invited_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class BillingEvent(Base):
+    __tablename__ = "billing_events"
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -98,7 +126,7 @@ async def init_db():
                 revision = await connection.exec_driver_sql(
                     "SELECT version_num FROM alembic_version"
                 )
-                if revision.scalar_one_or_none() != "20261020_01":
+                if revision.scalar_one_or_none() != "20261021_02":
                     raise RuntimeError("Run 'alembic upgrade head' before starting production")
             except Exception as exc:
                 raise RuntimeError("Production DB migration required: alembic upgrade head") from exc

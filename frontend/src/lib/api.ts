@@ -9,7 +9,7 @@ export type FactorCatalog = {
   warning: string; factors: Factor[];
 };
 export type Activity = {
-  id: string; description: string; supplier: string; activity_date: string;
+  id: string; created_by: string; description: string; supplier: string; activity_date: string;
   factor_id: string; factor_year: number; factor_value: number;
   quantity: number; unit: string; scope: string;
   emissions_kg_co2e: number; evidence_reference: string; status: string;

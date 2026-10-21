@@ -23,6 +23,44 @@ jobs:
           DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic current
           DB_URL=sqlite+aiosqlite:///./regtech-ci-migrations.sqlite3 python -m alembic check
       - run: python -m pytest -q
+  local-staging-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate private Docker Compose configuration
+        env:
+          REGTECH_DB_PASSWORD: ci-only-placeholder-password
+          REGTECH_SECRET_KEY: ci-only-placeholder-key
+        run: docker compose -f docker-compose.yml config --quiet
+
+  integrated-stack-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REGTECH_DB_PASSWORD: local-ci-database-placeholder
+      REGTECH_SECRET_KEY: local-ci-application-placeholder-with-sufficient-length
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start localhost-only stack
+        run: docker compose up --build --detach
+      - name: Wait for API and web to respond
+        run: |
+          for i in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:8000/healthz >/dev/null &&
+               curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 4
+          done
+          docker compose ps
+          exit 1
+      - name: Smoke-test real backend and frontend
+        run: python3 backend/scripts/smoke_local_stack.py
+      - name: Show diagnostics on failure
+        if: failure()
+        run: docker compose logs --tail=120 --no-color
+      - name: Tear down (isolated ephemeral test data)
+        if: always()
+        run: docker compose down --volumes
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

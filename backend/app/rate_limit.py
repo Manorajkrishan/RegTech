@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request
 
 _lock = Lock()
 _windows: dict[tuple[str, str], deque[float]] = {}
-LIMITS = {"login": (15, 60), "register": (20, 3600), "password_email": (10, 3600), "redeem": (30, 60), "password_change": (10, 3600), "invoice": (12, 60)}
+LIMITS = {"login": (15, 60), "register": (20, 3600), "password_email": (10, 3600), "redeem": (30, 60), "password_change": (10, 3600), "invoice": (12, 60), "invite": (8, 3600), "accept_invite": (15, 60)}
 
 
 def throttle(request: Request, purpose: str) -> None:

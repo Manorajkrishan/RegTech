@@ -23,6 +23,11 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_id: str = ""
+    free_activity_limit: int = 25
+
     def validate_security(self):
         if self.environment == "production":
             if len(self.secret_key) < 32:
